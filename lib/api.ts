@@ -206,6 +206,12 @@ export interface Application {
   submitted_at?: string
   created_at: string
   updated_at: string
+  customerName?: string
+  country?: string
+  visaType?: string
+  assignedTo?: string
+  submittedDate?: string
+  revenue?: number
 }
 
 export interface DashboardStats {
@@ -218,4 +224,12 @@ export interface DashboardStats {
   approved_today?: number
   active_employees?: number
   total_revenue?: number
+  pendingReview?: number
+  approvedToday?: number
+  highPriority?: number
+  totalApplications?: number
+  activeEmployees?: number
+  approvedApplications?: number
+  pendingApplications?: number
+  employees?: any[]
 }

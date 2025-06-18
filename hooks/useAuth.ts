@@ -1,6 +1,7 @@
 "use client"
 
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react"
+import { createContext, useContext, useEffect, useState } from "react"
+import type { ReactNode } from "react"
 import { apiClient, type User } from "@/lib/api"
 
 interface AuthContextType {
@@ -21,20 +22,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     // Check if user is logged in on mount
-    const token = localStorage.getItem("auth_token")
-    if (token) {
-      // Decode token to get user info (in a real app, you might want to validate with server)
-      try {
-        const payload = JSON.parse(atob(token.split(".")[1]))
-        setUser({
-          id: payload.userId,
-          email: payload.email,
-          firstName: payload.firstName,
-          lastName: payload.lastName,
-          userType: payload.userType,
-        })
-      } catch (err) {
-        localStorage.removeItem("auth_token")
+    if (typeof window !== "undefined") {
+      const token = localStorage.getItem("auth_token")
+      if (token) {
+        // Decode token to get user info (in a real app, you might want to validate with server)
+        try {
+          const payload = JSON.parse(atob(token.split(".")[1]))
+          setUser({
+            id: payload.userId,
+            email: payload.email,
+            firstName: payload.firstName,
+            lastName: payload.lastName,
+            userType: payload.userType,
+          })
+        } catch (err) {
+          localStorage.removeItem("auth_token")
+        }
       }
     }
     setLoading(false)
@@ -72,9 +75,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null)
   }
 
-  return (
-    <AuthContext.Provider value={{ user, login, register, logout, loading, error }}>{children}</AuthContext.Provider>
-  )
+  const contextValue: AuthContextType = {
+    user,
+    login,
+    register,
+    logout,
+    loading,
+    error,
+  }
+
+  return <AuthContext.Provider value={contextValue}>{children}</AuthContext.Provider>
 }
 
 export function useAuth() {
