@@ -21,11 +21,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    // Check if user is logged in on mount
     if (typeof window !== "undefined") {
       const token = localStorage.getItem("auth_token")
       if (token) {
-        // Decode token to get user info (in a real app, you might want to validate with server)
         try {
           const payload = JSON.parse(atob(token.split(".")[1]))
           setUser({
@@ -43,7 +41,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(false)
   }, [])
 
-  const login = async (email: string, password: string) => {
+  const handleLogin = async (email: string, password: string) => {
     try {
       setError(null)
       setLoading(true)
@@ -57,7 +55,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  const register = async (userData: any) => {
+  const handleRegister = async (userData: any) => {
     try {
       setError(null)
       setLoading(true)
@@ -70,21 +68,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  const logout = () => {
+  const handleLogout = () => {
     apiClient.logout()
     setUser(null)
   }
 
-  const contextValue: AuthContextType = {
-    user,
-    login,
-    register,
-    logout,
-    loading,
-    error,
-  }
-
-  return <AuthContext.Provider value={contextValue}>{children}</AuthContext.Provider>
+  return (
+    <AuthContext.Provider
+      value={{
+        user: user,
+        login: handleLogin,
+        register: handleRegister,
+        logout: handleLogout,
+        loading: loading,
+        error: error,
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  )
 }
 
 export function useAuth() {

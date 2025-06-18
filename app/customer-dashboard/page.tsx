@@ -43,8 +43,8 @@ export default function CustomerDashboard() {
 
       setApplications(applicationsData)
       setStats(statsData)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch data")
+    } catch (error: any) {
+      setError(error.message || "Failed to fetch data")
     } finally {
       setLoading(false)
     }

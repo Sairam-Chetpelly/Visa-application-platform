@@ -99,11 +99,22 @@ export default function EmployeeDashboard() {
 
   const filteredApplications = applications.filter((app) => {
     const matchesSearch =
-      app.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (app.customerName && app.customerName.toLowerCase().includes(searchTerm.toLowerCase())) ||
       app.id.toString().toLowerCase().includes(searchTerm.toLowerCase())
     const matchesStatus = statusFilter === "all" || app.status.toLowerCase().replace(" ", "-") === statusFilter
     return matchesSearch && matchesStatus
   })
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p>Loading dashboard...</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -143,7 +154,7 @@ export default function EmployeeDashboard() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600">Pending Review</p>
-                  <p className="text-2xl font-bold text-yellow-600">{stats.pendingReview}</p>
+                  <p className="text-2xl font-bold text-yellow-600">{stats.pending_review || 0}</p>
                 </div>
                 <div className="h-8 w-8 bg-yellow-100 rounded-full flex items-center justify-center">
                   <Eye className="h-4 w-4 text-yellow-600" />
@@ -156,7 +167,7 @@ export default function EmployeeDashboard() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600">Approved Today</p>
-                  <p className="text-2xl font-bold text-green-600">{stats.approvedToday}</p>
+                  <p className="text-2xl font-bold text-green-600">{stats.approved_today || 0}</p>
                 </div>
                 <div className="h-8 w-8 bg-green-100 rounded-full flex items-center justify-center">
                   <CheckCircle className="h-4 w-4 text-green-600" />
@@ -169,7 +180,7 @@ export default function EmployeeDashboard() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600">High Priority</p>
-                  <p className="text-2xl font-bold text-red-600">{stats.highPriority}</p>
+                  <p className="text-2xl font-bold text-red-600">0</p>
                 </div>
                 <div className="h-8 w-8 bg-red-100 rounded-full flex items-center justify-center">
                   <XCircle className="h-4 w-4 text-red-600" />
@@ -182,7 +193,7 @@ export default function EmployeeDashboard() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600">Total Applications</p>
-                  <p className="text-2xl font-bold text-gray-900">{stats.totalApplications}</p>
+                  <p className="text-2xl font-bold text-gray-900">{applications.length}</p>
                 </div>
                 <div className="h-8 w-8 bg-gray-100 rounded-full flex items-center justify-center">
                   <RotateCcw className="h-4 w-4 text-gray-600" />
@@ -248,17 +259,19 @@ export default function EmployeeDashboard() {
                 <TableBody>
                   {filteredApplications.map((app) => (
                     <TableRow key={app.id}>
-                      <TableCell className="font-medium">{app.id}</TableCell>
-                      <TableCell>{app.customerName}</TableCell>
-                      <TableCell>{app.country}</TableCell>
-                      <TableCell>{app.visaType}</TableCell>
+                      <TableCell className="font-medium">{app.application_number}</TableCell>
+                      <TableCell>{app.customerName || "N/A"}</TableCell>
+                      <TableCell>{app.country_name}</TableCell>
+                      <TableCell>{app.visa_type_name}</TableCell>
                       <TableCell>
                         <Badge className={getStatusColor(app.status)}>{app.status}</Badge>
                       </TableCell>
                       <TableCell>
                         <Badge className={getPriorityColor(app.priority)}>{app.priority}</Badge>
                       </TableCell>
-                      <TableCell>{app.submittedDate}</TableCell>
+                      <TableCell>
+                        {app.submitted_at ? new Date(app.submitted_at).toLocaleDateString() : "N/A"}
+                      </TableCell>
                       <TableCell>
                         <div className="flex space-x-2">
                           <Button size="sm" variant="outline">
