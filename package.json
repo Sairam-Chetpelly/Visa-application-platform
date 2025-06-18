@@ -10,6 +10,7 @@
     "lint": "next lint",
     "server": "node scripts/backend-server.js",
     "server:dev": "nodemon scripts/backend-server.js",
+    "setup-db": "node scripts/setup-database.js",
     "start": "next start"
   },
   "dependencies": {
@@ -31,7 +32,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cors": "latest",
-    "dotenv": "^16.3.1",
+    "dotenv": "latest",
     "express": "latest",
     "fs": "latest",
     "jsonwebtoken": "latest",
@@ -45,7 +46,7 @@
     "react-dom": "^18",
     "tailwind-merge": "^2.5.5",
     "tailwindcss-animate": "^1.0.7",
-    "twilio": "^4.19.0"
+    "url": "latest"
   },
   "devDependencies": {
     "@types/node": "^22",

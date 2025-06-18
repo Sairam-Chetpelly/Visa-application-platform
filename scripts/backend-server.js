@@ -8,6 +8,10 @@ import multer from "multer"
 import nodemailer from "nodemailer"
 import path from "path"
 import fs from "fs"
+import dotenv from "dotenv"
+
+// Load environment variables
+dotenv.config()
 
 const app = express()
 const PORT = process.env.PORT || 3001
@@ -17,7 +21,7 @@ app.use(cors())
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
 
-// Database connection
+// Database connection with better error handling
 const dbConfig = {
   host: process.env.DB_HOST || "localhost",
   user: process.env.DB_USER || "root",
@@ -28,10 +32,36 @@ const dbConfig = {
   queueLimit: 0,
 }
 
+// Validate database configuration
+if (!process.env.DB_PASSWORD) {
+  console.warn("⚠️  Warning: DB_PASSWORD not set in environment variables")
+  console.log("💡 Please create a .env file with your database credentials")
+}
+
 const pool = mysql.createPool(dbConfig)
+
+// Test database connection
+async function testDatabaseConnection() {
+  try {
+    const connection = await pool.getConnection()
+    console.log("✅ Database connected successfully!")
+    connection.release()
+  } catch (error) {
+    console.error("❌ Database connection failed:", error.message)
+    console.log("\n💡 Database setup tips:")
+    console.log("   1. Make sure MySQL is running")
+    console.log("   2. Create a .env file with your database credentials")
+    console.log("   3. Run: npm run setup-db")
+    console.log("   4. Check your MySQL user permissions")
+  }
+}
 
 // JWT Secret
 const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key"
+
+if (JWT_SECRET === "your-secret-key") {
+  console.warn("⚠️  Warning: Using default JWT secret. Please set JWT_SECRET in .env file")
+}
 
 // File upload configuration
 const storage = multer.diskStorage({
@@ -65,13 +95,20 @@ const upload = multer({
 })
 
 // Email configuration
-const emailTransporter = nodemailer.createTransport({
-  service: "gmail",
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-})
+let emailTransporter = null
+
+if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+  emailTransporter = nodemailer.createTransport({
+    service: "gmail",
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASS,
+    },
+  })
+  console.log("✅ Email service configured")
+} else {
+  console.warn("⚠️  Email service not configured (EMAIL_USER and EMAIL_PASS not set)")
+}
 
 // Middleware to verify JWT token
 const authenticateToken = (req, res, next) => {
@@ -106,19 +143,22 @@ const sendNotification = async (userId, type, title, message, applicationId = nu
 
     const user = users[0]
 
-    // Send email notification
-    if (type === "email" || type === "system") {
-      await emailTransporter.sendMail({
-        from: process.env.EMAIL_USER,
-        to: user.email,
-        subject: title,
-        html: `<p>${message}</p>`,
-      })
+    // Send email notification if configured
+    if ((type === "email" || type === "system") && emailTransporter) {
+      try {
+        await emailTransporter.sendMail({
+          from: process.env.EMAIL_USER,
+          to: user.email,
+          subject: title,
+          html: `<p>${message}</p>`,
+        })
+        console.log(`📧 Email sent to ${user.email}: ${title}`)
+      } catch (emailError) {
+        console.error("Email sending failed:", emailError.message)
+      }
+    } else {
+      console.log(`📝 Notification logged for user ${userId}: ${title}`)
     }
-
-    // SMS notification would go here if Twilio is configured
-    // For now, we'll skip SMS to avoid dependency issues
-    console.log(`Notification sent to user ${userId}: ${title}`)
   } catch (error) {
     console.error("Error sending notification:", error)
   }
@@ -126,10 +166,36 @@ const sendNotification = async (userId, type, title, message, applicationId = nu
 
 // Routes
 
+// Health check endpoint
+app.get("/api/health", async (req, res) => {
+  try {
+    // Test database connection
+    await pool.execute("SELECT 1")
+    res.json({
+      status: "OK",
+      message: "Server is running",
+      database: "Connected",
+      timestamp: new Date().toISOString(),
+    })
+  } catch (error) {
+    res.status(500).json({
+      status: "ERROR",
+      message: "Database connection failed",
+      error: error.message,
+      timestamp: new Date().toISOString(),
+    })
+  }
+})
+
 // User Registration
 app.post("/api/register", async (req, res) => {
   try {
     const { firstName, lastName, email, mobile, password, country } = req.body
+
+    // Validate required fields
+    if (!firstName || !lastName || !email || !password) {
+      return res.status(400).json({ error: "Missing required fields" })
+    }
 
     // Check if user already exists
     const [existingUsers] = await pool.execute("SELECT id FROM users WHERE email = ?", [email])
@@ -168,6 +234,11 @@ app.post("/api/register", async (req, res) => {
 app.post("/api/login", async (req, res) => {
   try {
     const { email, password } = req.body
+
+    // Validate required fields
+    if (!email || !password) {
+      return res.status(400).json({ error: "Email and password are required" })
+    }
 
     // Get user
     const [users] = await pool.execute(
@@ -282,48 +353,50 @@ app.post("/api/applications", authenticateToken, async (req, res) => {
         req.user.userId,
         countryId,
         visaTypeId,
-        travelInfo.purposeOfVisit,
-        travelInfo.intendedArrival,
-        travelInfo.intendedDeparture,
-        travelInfo.accommodationDetails,
-        employmentInfo.occupation,
-        employmentInfo.employer,
-        employmentInfo.employerAddress,
-        employmentInfo.monthlyIncome,
-        additionalInfo.previousVisits,
-        additionalInfo.criminalRecord,
-        additionalInfo.medicalConditions,
-        additionalInfo.additionalInfo,
+        travelInfo?.purposeOfVisit || "",
+        travelInfo?.intendedArrival || null,
+        travelInfo?.intendedDeparture || null,
+        travelInfo?.accommodationDetails || "",
+        employmentInfo?.occupation || "",
+        employmentInfo?.employer || "",
+        employmentInfo?.employerAddress || "",
+        employmentInfo?.monthlyIncome || 0,
+        additionalInfo?.previousVisits || "",
+        additionalInfo?.criminalRecord || false,
+        additionalInfo?.medicalConditions || "",
+        additionalInfo?.additionalInfo || "",
         "draft",
       ],
     )
 
-    // Update customer profile
-    await pool.execute(
-      `
-      UPDATE customer_profiles SET
-        date_of_birth = ?, place_of_birth = ?, nationality = ?, gender = ?,
-        marital_status = ?, address = ?, city = ?, postal_code = ?,
-        passport_number = ?, passport_issue_date = ?, passport_expiry_date = ?,
-        passport_issue_place = ?
-      WHERE user_id = ?
-    `,
-      [
-        personalInfo.dateOfBirth,
-        personalInfo.placeOfBirth,
-        personalInfo.nationality,
-        personalInfo.gender,
-        personalInfo.maritalStatus,
-        contactInfo.address,
-        contactInfo.city,
-        contactInfo.postalCode,
-        passportInfo.passportNumber,
-        passportInfo.passportIssueDate,
-        passportInfo.passportExpiryDate,
-        passportInfo.passportIssuePlace,
-        req.user.userId,
-      ],
-    )
+    // Update customer profile if data provided
+    if (personalInfo && contactInfo && passportInfo) {
+      await pool.execute(
+        `
+        UPDATE customer_profiles SET
+          date_of_birth = ?, place_of_birth = ?, nationality = ?, gender = ?,
+          marital_status = ?, address = ?, city = ?, postal_code = ?,
+          passport_number = ?, passport_issue_date = ?, passport_expiry_date = ?,
+          passport_issue_place = ?
+        WHERE user_id = ?
+      `,
+        [
+          personalInfo.dateOfBirth || null,
+          personalInfo.placeOfBirth || "",
+          personalInfo.nationality || "",
+          personalInfo.gender || "",
+          personalInfo.maritalStatus || "",
+          contactInfo.address || "",
+          contactInfo.city || "",
+          contactInfo.postalCode || "",
+          passportInfo.passportNumber || "",
+          passportInfo.passportIssueDate || null,
+          passportInfo.passportExpiryDate || null,
+          passportInfo.passportIssuePlace || "",
+          req.user.userId,
+        ],
+      )
+    }
 
     res.status(201).json({
       message: "Application created successfully",
@@ -604,7 +677,7 @@ app.get("/api/dashboard/stats", authenticateToken, async (req, res) => {
         SELECT 
           (SELECT COUNT(*) FROM visa_applications) as total_applications,
           (SELECT COUNT(*) FROM users WHERE user_type = 'employee' AND status = 'active') as active_employees,
-          (SELECT SUM(vt.fee) FROM visa_applications va JOIN visa_types vt ON va.visa_type_id = vt.id WHERE va.status = 'approved') as total_revenue,
+          (SELECT COALESCE(SUM(vt.fee), 0) FROM visa_applications va JOIN visa_types vt ON va.visa_type_id = vt.id WHERE va.status = 'approved') as total_revenue,
           (SELECT COUNT(*) FROM visa_applications WHERE status = 'under_review') as pending_review
       `)
 
@@ -618,11 +691,6 @@ app.get("/api/dashboard/stats", authenticateToken, async (req, res) => {
   }
 })
 
-// Health check endpoint
-app.get("/api/health", (req, res) => {
-  res.json({ status: "OK", message: "Server is running" })
-})
-
 // Error handling middleware
 app.use((error, req, res, next) => {
   console.error("Unhandled error:", error)
@@ -630,9 +698,12 @@ app.use((error, req, res, next) => {
 })
 
 // Start server
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`)
-  console.log(`Health check: http://localhost:${PORT}/api/health`)
+app.listen(PORT, async () => {
+  console.log(`🚀 Server running on port ${PORT}`)
+  console.log(`🔍 Health check: http://localhost:${PORT}/api/health`)
+
+  // Test database connection on startup
+  await testDatabaseConnection()
 })
 
 export default app
