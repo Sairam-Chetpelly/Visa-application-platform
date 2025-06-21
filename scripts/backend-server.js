@@ -3,12 +3,26 @@ import express from "express"
 import cors from "cors"
 import bcrypt from "bcrypt"
 import jwt from "jsonwebtoken"
-import mysql from "mysql2/promise"
+import mongoose from "mongoose"
 import multer from "multer"
 import nodemailer from "nodemailer"
 import path from "path"
 import fs from "fs"
 import dotenv from "dotenv"
+import Razorpay from "razorpay"
+import {
+  User,
+  CustomerProfile,
+  EmployeeProfile,
+  Country,
+  VisaType,
+  VisaApplication,
+  ApplicationDocument,
+  ApplicationStatusHistory,
+  Notification,
+  PaymentOrder,
+  SystemSettings
+} from "./mongodb-models.js"
 
 // Load environment variables
 dotenv.config()
@@ -21,38 +35,28 @@ app.use(cors())
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
 
-// Database connection with better error handling
-const dbConfig = {
-  host: process.env.DB_HOST || "localhost",
-  user: process.env.DB_USER || "root",
-  password: process.env.DB_PASSWORD || "",
-  database: process.env.DB_NAME || "visa_management_system",
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0,
-}
+// MongoDB connection
+const MONGODB_URI = process.env.MONGODB_URI || "mongodb://localhost:27017/visa_management_system"
 
 // Validate database configuration
-if (!process.env.DB_PASSWORD) {
-  console.warn("⚠️  Warning: DB_PASSWORD not set in environment variables")
-  console.log("💡 Please create a .env file with your database credentials")
+if (!process.env.MONGODB_URI) {
+  console.warn("⚠️  Warning: MONGODB_URI not set in environment variables")
+  console.log("💡 Please create a .env file with your MongoDB connection string")
 }
 
-const pool = mysql.createPool(dbConfig)
-
-// Test database connection
-async function testDatabaseConnection() {
+// Connect to MongoDB
+async function connectToMongoDB() {
   try {
-    const connection = await pool.getConnection()
-    console.log("✅ Database connected successfully!")
-    connection.release()
+    await mongoose.connect(MONGODB_URI)
+    console.log("✅ MongoDB connected successfully!")
   } catch (error) {
-    console.error("❌ Database connection failed:", error.message)
+    console.error("❌ MongoDB connection failed:", error.message)
     console.log("\n💡 Database setup tips:")
-    console.log("   1. Make sure MySQL is running")
-    console.log("   2. Create a .env file with your database credentials")
+    console.log("   1. Make sure MongoDB is running")
+    console.log("   2. Create a .env file with your MongoDB connection string")
     console.log("   3. Run: npm run setup-db")
-    console.log("   4. Check your MySQL user permissions")
+    console.log("   4. Check your MongoDB connection string")
+    process.exit(1)
   }
 }
 
@@ -61,6 +65,18 @@ const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key"
 
 if (JWT_SECRET === "your-secret-key") {
   console.warn("⚠️  Warning: Using default JWT secret. Please set JWT_SECRET in .env file")
+}
+
+// Razorpay configuration
+let razorpay = null
+if (process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET) {
+  razorpay = new Razorpay({
+    key_id: process.env.RAZORPAY_KEY_ID,
+    key_secret: process.env.RAZORPAY_KEY_SECRET,
+  })
+  console.log("✅ Razorpay payment gateway configured")
+} else {
+  console.warn("⚠️  Razorpay not configured (RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET not set)")
 }
 
 // File upload configuration
@@ -132,16 +148,17 @@ const authenticateToken = (req, res, next) => {
 const sendNotification = async (userId, type, title, message, applicationId = null) => {
   try {
     // Save notification to database
-    await pool.execute(
-      "INSERT INTO notifications (user_id, application_id, type, title, message) VALUES (?, ?, ?, ?, ?)",
-      [userId, applicationId, type, title, message],
-    )
+    await new Notification({
+      userId,
+      applicationId,
+      type,
+      title,
+      message
+    }).save()
 
     // Get user details
-    const [users] = await pool.execute("SELECT email, phone FROM users WHERE id = ?", [userId])
-    if (users.length === 0) return
-
-    const user = users[0]
+    const user = await User.findById(userId)
+    if (!user) return
 
     // Send email notification if configured
     if ((type === "email" || type === "system") && emailTransporter) {
@@ -170,11 +187,20 @@ const sendNotification = async (userId, type, title, message, applicationId = nu
 app.get("/api/health", async (req, res) => {
   try {
     // Test database connection
-    await pool.execute("SELECT 1")
+    await mongoose.connection.db.admin().ping()
+    
+    // Test data availability
+    const countryCount = await Country.countDocuments()
+    const visaTypeCount = await VisaType.countDocuments()
+    
     res.json({
       status: "OK",
       message: "Server is running",
       database: "Connected",
+      data: {
+        countries: countryCount,
+        visaTypes: visaTypeCount
+      },
       timestamp: new Date().toISOString(),
     })
   } catch (error) {
@@ -198,32 +224,40 @@ app.post("/api/register", async (req, res) => {
     }
 
     // Check if user already exists
-    const [existingUsers] = await pool.execute("SELECT id FROM users WHERE email = ?", [email])
-    if (existingUsers.length > 0) {
+    const existingUser = await User.findOne({ email })
+    if (existingUser) {
       return res.status(400).json({ error: "User already exists with this email" })
     }
 
     // Hash password
     const passwordHash = await bcrypt.hash(password, 10)
 
-    // Insert user
-    const [result] = await pool.execute(
-      "INSERT INTO users (email, password_hash, first_name, last_name, phone, user_type) VALUES (?, ?, ?, ?, ?, ?)",
-      [email, passwordHash, firstName, lastName, mobile, "customer"],
-    )
+    // Create user
+    const user = new User({
+      email,
+      passwordHash,
+      firstName,
+      lastName,
+      phone: mobile,
+      userType: "customer"
+    })
+    await user.save()
 
     // Create customer profile
-    await pool.execute("INSERT INTO customer_profiles (user_id, country) VALUES (?, ?)", [result.insertId, country])
+    await new CustomerProfile({
+      userId: user._id,
+      country
+    }).save()
 
     // Send welcome notification
     await sendNotification(
-      result.insertId,
+      user._id,
       "email",
       "Welcome to VisaFlow",
       "Your account has been created successfully. You can now start your visa application process.",
     )
 
-    res.status(201).json({ message: "User registered successfully", userId: result.insertId })
+    res.status(201).json({ message: "User registered successfully", userId: user._id })
   } catch (error) {
     console.error("Registration error:", error)
     res.status(500).json({ error: "Internal server error" })
@@ -241,19 +275,13 @@ app.post("/api/login", async (req, res) => {
     }
 
     // Get user
-    const [users] = await pool.execute(
-      "SELECT id, email, password_hash, first_name, last_name, user_type, status FROM users WHERE email = ?",
-      [email],
-    )
-
-    if (users.length === 0) {
+    const user = await User.findOne({ email })
+    if (!user) {
       return res.status(401).json({ error: "Invalid credentials" })
     }
 
-    const user = users[0]
-
     // Check password
-    const isValidPassword = await bcrypt.compare(password, user.password_hash)
+    const isValidPassword = await bcrypt.compare(password, user.passwordHash)
     if (!isValidPassword) {
       return res.status(401).json({ error: "Invalid credentials" })
     }
@@ -266,11 +294,11 @@ app.post("/api/login", async (req, res) => {
     // Generate JWT token
     const token = jwt.sign(
       {
-        userId: user.id,
+        userId: user._id,
         email: user.email,
-        userType: user.user_type,
-        firstName: user.first_name,
-        lastName: user.last_name,
+        userType: user.userType,
+        firstName: user.firstName,
+        lastName: user.lastName,
       },
       JWT_SECRET,
       { expiresIn: "24h" },
@@ -279,11 +307,11 @@ app.post("/api/login", async (req, res) => {
     res.json({
       token,
       user: {
-        id: user.id,
+        id: user._id,
         email: user.email,
-        firstName: user.first_name,
-        lastName: user.last_name,
-        userType: user.user_type,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        userType: user.userType,
       },
     })
   } catch (error) {
@@ -295,34 +323,87 @@ app.post("/api/login", async (req, res) => {
 // Get Countries and Visa Types
 app.get("/api/countries", async (req, res) => {
   try {
-    const [countries] = await pool.execute(`
-      SELECT c.*, 
-             JSON_ARRAYAGG(
-               JSON_OBJECT(
-                 'id', vt.id,
-                 'name', vt.name,
-                 'description', vt.description,
-                 'fee', vt.fee,
-                 'processing_time_days', vt.processing_time_days,
-                 'required_documents', vt.required_documents
-               )
-             ) as visa_types
-      FROM countries c
-      LEFT JOIN visa_types vt ON c.id = vt.country_id AND vt.is_active = true
-      WHERE c.is_active = true
-      GROUP BY c.id
-    `)
+    console.log("Fetching countries from MongoDB...")
+    
+    // Check if MongoDB is connected
+    if (mongoose.connection.readyState !== 1) {
+      console.error("MongoDB not connected")
+      return res.status(500).json({ error: "Database not connected" })
+    }
+    
+    const countries = await Country.find({ isActive: true })
+    console.log(`Found ${countries.length} countries`)
+    
+    if (countries.length === 0) {
+      console.warn("No countries found in database")
+      return res.json([])
+    }
+    
+    const countriesWithVisaTypes = await Promise.all(
+      countries.map(async (country) => {
+        try {
+          const visaTypes = await VisaType.find({ 
+            countryId: country._id, 
+            isActive: true 
+          })
+          
+          return {
+            id: country._id.toString(),
+            name: country.name || '',
+            code: country.code || '',
+            flagEmoji: country.flagEmoji || '',
+            flag_emoji: country.flagEmoji || '', // For backward compatibility
+            processingTimeMin: country.processingTimeMin || 15,
+            processingTimeMax: country.processingTimeMax || 30,
+            processing_time_min: country.processingTimeMin || 15, // For backward compatibility
+            processing_time_max: country.processingTimeMax || 30, // For backward compatibility
+            isActive: country.isActive,
+            visa_types: visaTypes.map(vt => ({
+              id: vt._id.toString(),
+              name: vt.name || '',
+              description: vt.description || '',
+              fee: vt.fee || 0,
+              processingTimeDays: vt.processingTimeDays || 30,
+              processing_time_days: vt.processingTimeDays || 30, // For backward compatibility
+              requiredDocuments: vt.requiredDocuments || [],
+              required_documents: vt.requiredDocuments || [] // For backward compatibility
+            }))
+          }
+        } catch (visaTypeError) {
+          console.error(`Error fetching visa types for country ${country.name}:`, visaTypeError)
+          return {
+            id: country._id.toString(),
+            name: country.name || '',
+            code: country.code || '',
+            flagEmoji: country.flagEmoji || '',
+            flag_emoji: country.flagEmoji || '',
+            processingTimeMin: country.processingTimeMin || 15,
+            processingTimeMax: country.processingTimeMax || 30,
+            processing_time_min: country.processingTimeMin || 15,
+            processing_time_max: country.processingTimeMax || 30,
+            isActive: country.isActive,
+            visa_types: []
+          }
+        }
+      })
+    )
 
-    res.json(countries)
+    console.log(`Returning ${countriesWithVisaTypes.length} countries with visa types`)
+    res.json(countriesWithVisaTypes)
   } catch (error) {
     console.error("Error fetching countries:", error)
-    res.status(500).json({ error: "Internal server error" })
+    res.status(500).json({ 
+      error: "Failed to fetch countries", 
+      details: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    })
   }
 })
 
 // Create Visa Application
 app.post("/api/applications", authenticateToken, async (req, res) => {
   try {
+    console.log("Creating visa application:", req.body)
     const {
       countryId,
       visaTypeId,
@@ -334,116 +415,400 @@ app.post("/api/applications", authenticateToken, async (req, res) => {
       additionalInfo,
     } = req.body
 
+    // Validate required fields
+    if (!countryId || !visaTypeId) {
+      return res.status(400).json({ error: "Country and visa type are required" })
+    }
+
+    // Verify country and visa type exist
+    const country = await Country.findById(countryId)
+    const visaType = await VisaType.findById(visaTypeId)
+    
+    if (!country) {
+      return res.status(400).json({ error: "Invalid country selected" })
+    }
+    
+    if (!visaType) {
+      return res.status(400).json({ error: "Invalid visa type selected" })
+    }
+
     // Generate application number
     const applicationNumber = "APP" + Date.now().toString().slice(-6)
 
-    // Insert application
-    const [result] = await pool.execute(
-      `
-      INSERT INTO visa_applications (
-        application_number, customer_id, country_id, visa_type_id,
-        purpose_of_visit, intended_arrival_date, intended_departure_date,
-        accommodation_details, occupation, employer, employer_address,
-        monthly_income, previous_visits, criminal_record, medical_conditions,
-        additional_info, status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `,
-      [
-        applicationNumber,
-        req.user.userId,
-        countryId,
-        visaTypeId,
-        travelInfo?.purposeOfVisit || "",
-        travelInfo?.intendedArrival || null,
-        travelInfo?.intendedDeparture || null,
-        travelInfo?.accommodationDetails || "",
-        employmentInfo?.occupation || "",
-        employmentInfo?.employer || "",
-        employmentInfo?.employerAddress || "",
-        employmentInfo?.monthlyIncome || 0,
-        additionalInfo?.previousVisits || "",
-        additionalInfo?.criminalRecord || false,
-        additionalInfo?.medicalConditions || "",
-        additionalInfo?.additionalInfo || "",
-        "draft",
-      ],
-    )
+    // Create application
+    const application = new VisaApplication({
+      applicationNumber,
+      customerId: req.user.userId,
+      countryId,
+      visaTypeId,
+      purposeOfVisit: travelInfo?.purposeOfVisit || "",
+      intendedArrivalDate: travelInfo?.intendedArrival || null,
+      intendedDepartureDate: travelInfo?.intendedDeparture || null,
+      accommodationDetails: travelInfo?.accommodationDetails || "",
+      occupation: employmentInfo?.occupation || "",
+      employer: employmentInfo?.employer || "",
+      employerAddress: employmentInfo?.employerAddress || "",
+      monthlyIncome: employmentInfo?.monthlyIncome || 0,
+      previousVisits: additionalInfo?.previousVisits || "",
+      criminalRecord: additionalInfo?.criminalRecord || false,
+      medicalConditions: additionalInfo?.medicalConditions || "",
+      additionalInfo: additionalInfo?.additionalInfo || "",
+      status: "draft"
+    })
+    await application.save()
+    console.log("Application created with ID:", application._id)
 
     // Update customer profile if data provided
     if (personalInfo && contactInfo && passportInfo) {
-      await pool.execute(
-        `
-        UPDATE customer_profiles SET
-          date_of_birth = ?, place_of_birth = ?, nationality = ?, gender = ?,
-          marital_status = ?, address = ?, city = ?, postal_code = ?,
-          passport_number = ?, passport_issue_date = ?, passport_expiry_date = ?,
-          passport_issue_place = ?
-        WHERE user_id = ?
-      `,
-        [
-          personalInfo.dateOfBirth || null,
-          personalInfo.placeOfBirth || "",
-          personalInfo.nationality || "",
-          personalInfo.gender || "",
-          personalInfo.maritalStatus || "",
-          contactInfo.address || "",
-          contactInfo.city || "",
-          contactInfo.postalCode || "",
-          passportInfo.passportNumber || "",
-          passportInfo.passportIssueDate || null,
-          passportInfo.passportExpiryDate || null,
-          passportInfo.passportIssuePlace || "",
-          req.user.userId,
-        ],
+      await CustomerProfile.findOneAndUpdate(
+        { userId: req.user.userId },
+        {
+          dateOfBirth: personalInfo.dateOfBirth || null,
+          placeOfBirth: personalInfo.placeOfBirth || "",
+          nationality: personalInfo.nationality || "",
+          gender: personalInfo.gender || "",
+          maritalStatus: personalInfo.maritalStatus || "",
+          address: contactInfo.address || "",
+          city: contactInfo.city || "",
+          postalCode: contactInfo.postalCode || "",
+          passportNumber: passportInfo.passportNumber || "",
+          passportIssueDate: passportInfo.passportIssueDate || null,
+          passportExpiryDate: passportInfo.passportExpiryDate || null,
+          passportIssuePlace: passportInfo.passportIssuePlace || ""
+        },
+        { upsert: true }
       )
     }
 
     res.status(201).json({
       message: "Application created successfully",
-      applicationId: result.insertId,
+      applicationId: application._id,
       applicationNumber,
     })
   } catch (error) {
     console.error("Error creating application:", error)
-    res.status(500).json({ error: "Internal server error" })
+    res.status(500).json({ error: "Internal server error", details: error.message })
   }
 })
 
-// Submit Application
+// Create Payment Order
+app.post("/api/applications/:id/create-payment", authenticateToken, async (req, res) => {
+  try {
+    const applicationId = req.params.id
+
+    // Get application details
+    console.log("Looking for application:", applicationId, "for user:", req.user.userId)
+    
+    const application = await VisaApplication.findOne({
+      _id: applicationId,
+      customerId: req.user.userId
+    })
+
+    if (!application) {
+      console.log("Application not found")
+      return res.status(404).json({ error: "Application not found" })
+    }
+
+    console.log("Found application:", application.applicationNumber)
+    
+    // Populate visa type and country separately for better error handling
+    const visaType = await VisaType.findById(application.visaTypeId)
+    const country = await Country.findById(application.countryId)
+    
+    if (!visaType) {
+      console.log("Visa type not found:", application.visaTypeId)
+      return res.status(400).json({ error: "Visa type not found" })
+    }
+    
+    if (!country) {
+      console.log("Country not found:", application.countryId)
+      return res.status(400).json({ error: "Country not found" })
+    }
+    
+    console.log("Visa type:", visaType.name, "Fee:", visaType.fee)
+    console.log("Country:", country.name)
+    
+    if (application.status !== "draft") {
+      return res.status(400).json({ error: "Application is not in draft status" })
+    }
+
+    // If Razorpay is not configured, allow direct submission without payment
+    if (!razorpay) {
+      console.log("Razorpay not configured, allowing direct submission")
+      
+      // Update application status directly
+      await VisaApplication.findOneAndUpdate(
+        { _id: applicationId, customerId: req.user.userId },
+        {
+          status: "submitted",
+          submittedAt: new Date()
+        }
+      )
+
+      // Add status history
+      await new ApplicationStatusHistory({
+        applicationId,
+        oldStatus: "draft",
+        newStatus: "submitted",
+        changedBy: req.user.userId,
+        comments: "Application submitted without payment (Razorpay not configured)"
+      }).save()
+
+      // Auto-assign to available employee
+      const employees = await User.aggregate([
+        {
+          $lookup: {
+            from: "employeeprofiles",
+            localField: "_id",
+            foreignField: "userId",
+            as: "profile"
+          }
+        },
+        {
+          $match: {
+            userType: "employee",
+            status: "active",
+            "profile.0": { $exists: true }
+          }
+        },
+        { $sample: { size: 1 } }
+      ])
+
+      if (employees.length > 0) {
+        await VisaApplication.findByIdAndUpdate(applicationId, {
+          assignedTo: employees[0]._id,
+          status: "under_review"
+        })
+
+        // Notify assigned employee
+        await sendNotification(
+          employees[0]._id,
+          "email",
+          "New Application Assigned",
+          `A new visa application has been assigned to you for review.`,
+          applicationId,
+        )
+      }
+
+      // Notify customer
+      await sendNotification(
+        req.user.userId,
+        "email",
+        "Application Submitted Successfully",
+        "Your visa application has been submitted successfully and is now under review.",
+        applicationId,
+      )
+
+      return res.json({ 
+        message: "Application submitted successfully",
+        paymentRequired: false,
+        applicationNumber: application.applicationNumber
+      })
+    }
+
+    // Create Razorpay order
+    const order = await razorpay.orders.create({
+      amount: Math.round(visaType.fee * 100), // Amount in paise
+      currency: "INR",
+      receipt: `visa_${Date.now().toString().slice(-8)}`,
+      notes: {
+        application_id: applicationId,
+        customer_id: req.user.userId,
+        visa_type: visaType.name,
+        country: country.name
+      }
+    })
+
+    // Save payment order to database
+    await new PaymentOrder({
+      applicationId,
+      razorpayOrderId: order.id,
+      amount: visaType.fee,
+      currency: "INR",
+      status: "created"
+    }).save()
+
+    res.json({
+      orderId: order.id,
+      amount: order.amount,
+      currency: order.currency,
+      key: process.env.RAZORPAY_KEY_ID,
+      applicationNumber: application.applicationNumber,
+      visaType: visaType.name,
+      country: country.name,
+      paymentRequired: true
+    })
+  } catch (error) {
+    console.error("Error creating payment order:", error)
+    res.status(500).json({ error: "Failed to create payment order", details: error.message })
+  }
+})
+
+// Verify Payment and Submit Application
+app.post("/api/applications/:id/verify-payment", authenticateToken, async (req, res) => {
+  try {
+    const applicationId = req.params.id
+    const { razorpay_payment_id, razorpay_order_id, razorpay_signature } = req.body
+
+    if (!razorpay) {
+      return res.status(500).json({ error: "Payment gateway not configured" })
+    }
+
+    // Verify payment signature
+    const crypto = await import('crypto')
+    const expectedSignature = crypto.createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
+      .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+      .digest('hex')
+
+    if (expectedSignature !== razorpay_signature) {
+      return res.status(400).json({ error: "Invalid payment signature" })
+    }
+
+    // Update payment status
+    await PaymentOrder.findOneAndUpdate(
+      { razorpayOrderId: razorpay_order_id },
+      {
+        razorpayPaymentId: razorpay_payment_id,
+        status: "paid",
+        verifiedAt: new Date()
+      }
+    )
+
+    // Submit the application
+    await VisaApplication.findOneAndUpdate(
+      { _id: applicationId, customerId: req.user.userId },
+      {
+        status: "submitted",
+        submittedAt: new Date()
+      }
+    )
+
+    // Add status history
+    await new ApplicationStatusHistory({
+      applicationId,
+      oldStatus: "draft",
+      newStatus: "submitted",
+      changedBy: req.user.userId,
+      comments: "Payment verified and application submitted"
+    }).save()
+
+    // Auto-assign to available employee
+    const employees = await User.aggregate([
+      {
+        $lookup: {
+          from: "employeeprofiles",
+          localField: "_id",
+          foreignField: "userId",
+          as: "profile"
+        }
+      },
+      {
+        $match: {
+          userType: "employee",
+          status: "active",
+          "profile.0": { $exists: true }
+        }
+      },
+      { $sample: { size: 1 } }
+    ])
+
+    if (employees.length > 0) {
+      await VisaApplication.findByIdAndUpdate(applicationId, {
+        assignedTo: employees[0]._id,
+        status: "under_review"
+      })
+
+      // Notify assigned employee
+      await sendNotification(
+        employees[0]._id,
+        "email",
+        "New Application Assigned",
+        `A new visa application has been assigned to you for review.`,
+        applicationId,
+      )
+    }
+
+    // Notify customer
+    await sendNotification(
+      req.user.userId,
+      "email",
+      "Application Submitted Successfully",
+      "Your visa application has been submitted successfully and payment has been processed. You will receive updates on the application status.",
+      applicationId,
+    )
+
+    res.json({ message: "Payment verified and application submitted successfully" })
+  } catch (error) {
+    console.error("Error verifying payment:", error)
+    res.status(500).json({ error: "Failed to verify payment" })
+  }
+})
+
+// Submit Application (Legacy - for applications without payment)
 app.post("/api/applications/:id/submit", authenticateToken, async (req, res) => {
   try {
     const applicationId = req.params.id
 
+    // Check if application exists and belongs to user
+    const application = await VisaApplication.findOne({
+      _id: applicationId,
+      customerId: req.user.userId
+    })
+
+    if (!application) {
+      return res.status(404).json({ error: "Application not found" })
+    }
+
+    if (application.status !== "draft") {
+      return res.status(400).json({ error: "Application is not in draft status" })
+    }
+
     // Update application status
-    await pool.execute(
-      "UPDATE visa_applications SET status = ?, submitted_at = NOW() WHERE id = ? AND customer_id = ?",
-      ["submitted", applicationId, req.user.userId],
+    await VisaApplication.findOneAndUpdate(
+      { _id: applicationId, customerId: req.user.userId },
+      {
+        status: "submitted",
+        submittedAt: new Date()
+      }
     )
 
     // Add status history
-    await pool.execute(
-      "INSERT INTO application_status_history (application_id, old_status, new_status, changed_by) VALUES (?, ?, ?, ?)",
-      [applicationId, "draft", "submitted", req.user.userId],
-    )
+    await new ApplicationStatusHistory({
+      applicationId,
+      oldStatus: "draft",
+      newStatus: "submitted",
+      changedBy: req.user.userId
+    }).save()
 
-    // Auto-assign to available employee (simple round-robin)
-    const [employees] = await pool.execute(`
-      SELECT u.id FROM users u 
-      JOIN employee_profiles ep ON u.id = ep.user_id 
-      WHERE u.user_type = 'employee' AND u.status = 'active'
-      ORDER BY RAND() LIMIT 1
-    `)
+    // Auto-assign to available employee
+    const employees = await User.aggregate([
+      {
+        $lookup: {
+          from: "employeeprofiles",
+          localField: "_id",
+          foreignField: "userId",
+          as: "profile"
+        }
+      },
+      {
+        $match: {
+          userType: "employee",
+          status: "active",
+          "profile.0": { $exists: true }
+        }
+      },
+      { $sample: { size: 1 } }
+    ])
 
     if (employees.length > 0) {
-      await pool.execute("UPDATE visa_applications SET assigned_to = ?, status = ? WHERE id = ?", [
-        employees[0].id,
-        "under_review",
-        applicationId,
-      ])
+      await VisaApplication.findByIdAndUpdate(applicationId, {
+        assignedTo: employees[0]._id,
+        status: "under_review"
+      })
 
       // Notify assigned employee
       await sendNotification(
-        employees[0].id,
+        employees[0]._id,
         "email",
         "New Application Assigned",
         `A new visa application has been assigned to you for review.`,
@@ -479,14 +844,21 @@ app.post("/api/applications/:id/documents", authenticateToken, upload.array("doc
     }
 
     // Insert document records
+    const documents = []
     for (let i = 0; i < files.length; i++) {
       const file = files[i]
       const documentType = documentTypes[i] || "other"
 
-      await pool.execute(
-        "INSERT INTO application_documents (application_id, document_type, file_name, file_path, file_size, mime_type) VALUES (?, ?, ?, ?, ?, ?)",
-        [applicationId, documentType, file.originalname, file.path, file.size, file.mimetype],
-      )
+      const document = new ApplicationDocument({
+        applicationId,
+        documentType,
+        fileName: file.originalname,
+        filePath: file.path,
+        fileSize: file.size,
+        mimeType: file.mimetype
+      })
+      await document.save()
+      documents.push(document)
     }
 
     res.json({ message: "Documents uploaded successfully", count: files.length })
@@ -499,31 +871,61 @@ app.post("/api/applications/:id/documents", authenticateToken, upload.array("doc
 // Get User Applications
 app.get("/api/applications", authenticateToken, async (req, res) => {
   try {
-    let query = `
-      SELECT va.*, c.name as country_name, vt.name as visa_type_name,
-             u.first_name as assigned_first_name, u.last_name as assigned_last_name
-      FROM visa_applications va
-      JOIN countries c ON va.country_id = c.id
-      JOIN visa_types vt ON va.visa_type_id = vt.id
-      LEFT JOIN users u ON va.assigned_to = u.id
-    `
-    const params = []
+    let filter = {}
 
     if (req.user.userType === "customer") {
-      query += " WHERE va.customer_id = ?"
-      params.push(req.user.userId)
+      filter.customerId = req.user.userId
     } else if (req.user.userType === "employee") {
-      query += ' WHERE va.assigned_to = ? OR va.status = "submitted"'
-      params.push(req.user.userId)
+      filter.$or = [
+        { assignedTo: req.user.userId },
+        { status: "submitted" }
+      ]
     }
-    // Admin sees all applications
+    // Admin sees all applications (no filter)
 
-    query += " ORDER BY va.created_at DESC"
+    const applications = await VisaApplication.find(filter)
+      .populate('countryId', 'name')
+      .populate('visaTypeId', 'name')
+      .populate('assignedTo', 'firstName lastName')
+      .sort({ createdAt: -1 })
 
-    const [applications] = await pool.execute(query, params)
     res.json(applications)
   } catch (error) {
     console.error("Error fetching applications:", error)
+    res.status(500).json({ error: "Internal server error" })
+  }
+})
+
+// Get Single Application Details
+app.get("/api/applications/:id", authenticateToken, async (req, res) => {
+  try {
+    const applicationId = req.params.id
+    let filter = { _id: applicationId }
+
+    // Apply user-specific filters
+    if (req.user.userType === "customer") {
+      filter.customerId = req.user.userId
+    } else if (req.user.userType === "employee") {
+      filter.$or = [
+        { assignedTo: req.user.userId },
+        { status: "submitted" }
+      ]
+    }
+    // Admin can see any application
+
+    const application = await VisaApplication.findOne(filter)
+      .populate('countryId', 'name code flagEmoji')
+      .populate('visaTypeId', 'name description fee processingTimeDays')
+      .populate('customerId', 'firstName lastName email')
+      .populate('assignedTo', 'firstName lastName')
+
+    if (!application) {
+      return res.status(404).json({ error: "Application not found" })
+    }
+
+    res.json(application)
+  } catch (error) {
+    console.error("Error fetching application details:", error)
     res.status(500).json({ error: "Internal server error" })
   }
 })
@@ -539,40 +941,35 @@ app.post("/api/applications/:id/status", authenticateToken, async (req, res) => 
     const { status, comments } = req.body
 
     // Get current application
-    const [applications] = await pool.execute("SELECT status, customer_id FROM visa_applications WHERE id = ?", [
-      applicationId,
-    ])
-
-    if (applications.length === 0) {
+    const application = await VisaApplication.findById(applicationId)
+    if (!application) {
       return res.status(404).json({ error: "Application not found" })
     }
 
-    const oldStatus = applications[0].status
-    const customerId = applications[0].customer_id
+    const oldStatus = application.status
+    const customerId = application.customerId
 
     // Update application status
-    const updateFields = ["status = ?"]
-    const updateParams = [status]
+    const updateData = { status }
 
     if (status === "approved") {
-      updateFields.push("approved_at = NOW()")
+      updateData.approvedAt = new Date()
     } else if (status === "rejected") {
-      updateFields.push("rejection_reason = ?")
-      updateParams.push(comments)
+      updateData.rejectionReason = comments
     } else if (status === "resent") {
-      updateFields.push("resend_reason = ?")
-      updateParams.push(comments)
+      updateData.resendReason = comments
     }
 
-    updateParams.push(applicationId)
-
-    await pool.execute(`UPDATE visa_applications SET ${updateFields.join(", ")} WHERE id = ?`, updateParams)
+    await VisaApplication.findByIdAndUpdate(applicationId, updateData)
 
     // Add status history
-    await pool.execute(
-      "INSERT INTO application_status_history (application_id, old_status, new_status, changed_by, comments) VALUES (?, ?, ?, ?, ?)",
-      [applicationId, oldStatus, status, req.user.userId, comments],
-    )
+    await new ApplicationStatusHistory({
+      applicationId,
+      oldStatus,
+      newStatus: status,
+      changedBy: req.user.userId,
+      comments
+    }).save()
 
     // Send notification to customer
     const statusMessages = {
@@ -599,41 +996,48 @@ app.post("/api/employees", authenticateToken, async (req, res) => {
       return res.status(403).json({ error: "Access denied" })
     }
 
-    const { name, email, role, password } = req.body
+    const { firstName,lastName, email, role, password } = req.body
 
     // Check if user already exists
-    const [existingUsers] = await pool.execute("SELECT id FROM users WHERE email = ?", [email])
-    if (existingUsers.length > 0) {
+    const existingUser = await User.findOne({ email })
+    if (existingUser) {
       return res.status(400).json({ error: "User already exists with this email" })
     }
 
     // Hash password
     const passwordHash = await bcrypt.hash(password, 10)
 
-    // Insert user
-    const [result] = await pool.execute(
-      "INSERT INTO users (email, password_hash, first_name, last_name, user_type) VALUES (?, ?, ?, ?, ?)",
-      [email, passwordHash, name.split(" ")[0], name.split(" ").slice(1).join(" "), "employee"],
-    )
+    // Create user
+    const user = new User({
+      email,
+      passwordHash,
+      firstName: firstName,
+      lastName: lastName,
+      userType: "employee"
+    })
+    await user.save()
 
     // Generate employee ID
-    const employeeId = "EMP" + String(result.insertId).padStart(3, "0")
+    const employeeId = "EMP" + String(user._id).slice(-6).toUpperCase()
 
     // Create employee profile
-    await pool.execute(
-      "INSERT INTO employee_profiles (user_id, employee_id, role, hire_date, created_by) VALUES (?, ?, ?, CURDATE(), ?)",
-      [result.insertId, employeeId, role, req.user.userId],
-    )
+    await new EmployeeProfile({
+      userId: user._id,
+      employeeId,
+      role,
+      hireDate: new Date(),
+      createdBy: req.user.userId
+    }).save()
 
     // Send welcome email
     await sendNotification(
-      result.insertId,
+      user._id,
       "email",
       "Welcome to VisaFlow Team",
       `Your employee account has been created. Your login credentials are: Email: ${email}, Password: ${password}. Please change your password after first login.`,
     )
 
-    res.status(201).json({ message: "Employee created successfully", employeeId: result.insertId })
+    res.status(201).json({ message: "Employee created successfully", employeeId: user._id })
   } catch (error) {
     console.error("Error creating employee:", error)
     res.status(500).json({ error: "Internal server error" })
@@ -646,48 +1050,393 @@ app.get("/api/dashboard/stats", authenticateToken, async (req, res) => {
     let stats = {}
 
     if (req.user.userType === "customer") {
-      const [customerStats] = await pool.execute(
-        `
-        SELECT 
-          COUNT(*) as total_applications,
-          SUM(CASE WHEN status = 'under_review' THEN 1 ELSE 0 END) as under_review,
-          SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) as approved,
-          SUM(CASE WHEN status = 'draft' THEN 1 ELSE 0 END) as draft
-        FROM visa_applications WHERE customer_id = ?
-      `,
-        [req.user.userId],
-      )
-
-      stats = customerStats[0]
+      const applications = await VisaApplication.find({ customerId: req.user.userId })
+      stats = {
+        total_applications: applications.length,
+        under_review: applications.filter(app => app.status === 'under_review').length,
+        approved: applications.filter(app => app.status === 'approved').length,
+        draft: applications.filter(app => app.status === 'draft').length
+      }
     } else if (req.user.userType === "employee") {
-      const [employeeStats] = await pool.execute(
-        `
-        SELECT 
-          COUNT(*) as assigned_applications,
-          SUM(CASE WHEN status = 'under_review' THEN 1 ELSE 0 END) as pending_review,
-          SUM(CASE WHEN status = 'approved' AND DATE(approved_at) = CURDATE() THEN 1 ELSE 0 END) as approved_today
-        FROM visa_applications WHERE assigned_to = ?
-      `,
-        [req.user.userId],
-      )
-
-      stats = employeeStats[0]
+      const applications = await VisaApplication.find({ assignedTo: req.user.userId })
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      const tomorrow = new Date(today)
+      tomorrow.setDate(tomorrow.getDate() + 1)
+      
+      stats = {
+        assigned_applications: applications.length,
+        pending_review: applications.filter(app => app.status === 'under_review').length,
+        approved_today: applications.filter(app => 
+          app.status === 'approved' && 
+          app.approvedAt >= today && 
+          app.approvedAt < tomorrow
+        ).length
+      }
     } else if (req.user.userType === "admin") {
-      const [adminStats] = await pool.execute(`
-        SELECT 
-          (SELECT COUNT(*) FROM visa_applications) as total_applications,
-          (SELECT COUNT(*) FROM users WHERE user_type = 'employee' AND status = 'active') as active_employees,
-          (SELECT COALESCE(SUM(vt.fee), 0) FROM visa_applications va JOIN visa_types vt ON va.visa_type_id = vt.id WHERE va.status = 'approved') as total_revenue,
-          (SELECT COUNT(*) FROM visa_applications WHERE status = 'under_review') as pending_review
-      `)
-
-      stats = adminStats[0]
+      const totalApplications = await VisaApplication.countDocuments()
+      const totalCustomers = await User.countDocuments({ userType: 'customer' })
+      const activeEmployees = await User.countDocuments({ userType: 'employee', status: 'active' })
+      const pendingReview = await VisaApplication.countDocuments({ status: 'under_review' })
+      const draftApplications = await VisaApplication.countDocuments({ status: 'draft' })
+      const totalPayments = await PaymentOrder.countDocuments({ status: 'paid' })
+      
+      // Calculate total revenue from paid orders
+      const paidOrders = await PaymentOrder.find({ status: 'paid' })
+      const totalRevenue = paidOrders.reduce((sum, order) => sum + order.amount, 0)
+      
+      // Get employees with profiles
+      const employees = await User.aggregate([
+        {
+          $match: { userType: 'employee' }
+        },
+        {
+          $lookup: {
+            from: 'employeeprofiles',
+            localField: '_id',
+            foreignField: 'userId',
+            as: 'profile'
+          }
+        },
+        {
+          $project: {
+            firstName: 1,
+            lastName: 1,
+            email: 1,
+            status: 1,
+            role: { $arrayElemAt: ['$profile.role', 0] },
+            employeeId: { $arrayElemAt: ['$profile.employeeId', 0] }
+          }
+        }
+      ])
+      
+      stats = {
+        totalApplications,
+        totalCustomers,
+        activeEmployees,
+        totalRevenue,
+        pendingApplications: pendingReview,
+        approvedApplications: await VisaApplication.countDocuments({ status: 'approved' }),
+        draftApplications,
+        totalPayments,
+        employees
+      }
     }
 
     res.json(stats)
   } catch (error) {
     console.error("Error fetching dashboard stats:", error)
     res.status(500).json({ error: "Internal server error" })
+  }
+})
+
+// Admin CRUD Operations
+
+// Get all employees (Admin only)
+app.get("/api/admin/employees", authenticateToken, async (req, res) => {
+  try {
+    if (req.user.userType !== "admin") {
+      return res.status(403).json({ error: "Access denied" })
+    }
+
+    const employees = await User.aggregate([
+      { $match: { userType: 'employee' } },
+      {
+        $lookup: {
+          from: 'employeeprofiles',
+          localField: '_id',
+          foreignField: 'userId',
+          as: 'profile'
+        }
+      },
+      {
+        $project: {
+          firstName: 1,
+          lastName: 1,
+          email: 1,
+          phone: 1,
+          status: 1,
+          createdAt: 1,
+          role: { $arrayElemAt: ['$profile.role', 0] },
+          employeeId: { $arrayElemAt: ['$profile.employeeId', 0] },
+          hireDate: { $arrayElemAt: ['$profile.hireDate', 0] }
+        }
+      }
+    ])
+
+    res.json(employees)
+  } catch (error) {
+    console.error("Error fetching employees:", error)
+    res.status(500).json({ error: "Internal server error" })
+  }
+})
+
+// Update employee (Admin only)
+app.put("/api/admin/employees/:id", authenticateToken, async (req, res) => {
+  try {
+    if (req.user.userType !== "admin") {
+      return res.status(403).json({ error: "Access denied" })
+    }
+
+    const { firstName, lastName, email, phone, status, role } = req.body
+    const employeeId = req.params.id
+
+    await User.findByIdAndUpdate(employeeId, {
+      firstName,
+      lastName,
+      email,
+      phone,
+      status
+    })
+
+    await EmployeeProfile.findOneAndUpdate(
+      { userId: employeeId },
+      { role }
+    )
+
+    res.json({ message: "Employee updated successfully" })
+  } catch (error) {
+    console.error("Error updating employee:", error)
+    res.status(500).json({ error: "Internal server error" })
+  }
+})
+
+// Delete employee (Admin only)
+app.delete("/api/admin/employees/:id", authenticateToken, async (req, res) => {
+  try {
+    if (req.user.userType !== "admin") {
+      return res.status(403).json({ error: "Access denied" })
+    }
+
+    const employeeId = req.params.id
+
+    await EmployeeProfile.findOneAndDelete({ userId: employeeId })
+    await User.findByIdAndDelete(employeeId)
+
+    res.json({ message: "Employee deleted successfully" })
+  } catch (error) {
+    console.error("Error deleting employee:", error)
+    res.status(500).json({ error: "Internal server error" })
+  }
+})
+
+// Get all customers (Admin only)
+app.get("/api/admin/customers", authenticateToken, async (req, res) => {
+  try {
+    if (req.user.userType !== "admin") {
+      return res.status(403).json({ error: "Access denied" })
+    }
+
+    const customers = await User.aggregate([
+      { $match: { userType: 'customer' } },
+      {
+        $lookup: {
+          from: 'customerprofiles',
+          localField: '_id',
+          foreignField: 'userId',
+          as: 'profile'
+        }
+      },
+      {
+        $project: {
+          firstName: 1,
+          lastName: 1,
+          email: 1,
+          phone: 1,
+          status: 1,
+          createdAt: 1,
+          nationality: { $arrayElemAt: ['$profile.nationality', 0] },
+          country: { $arrayElemAt: ['$profile.country', 0] },
+          passportNumber: { $arrayElemAt: ['$profile.passportNumber', 0] }
+        }
+      }
+    ])
+
+    res.json(customers)
+  } catch (error) {
+    console.error("Error fetching customers:", error)
+    res.status(500).json({ error: "Internal server error" })
+  }
+})
+
+// Update customer (Admin only)
+app.put("/api/admin/customers/:id", authenticateToken, async (req, res) => {
+  try {
+    if (req.user.userType !== "admin") {
+      return res.status(403).json({ error: "Access denied" })
+    }
+
+    const { firstName, lastName, email, phone, status } = req.body
+    const customerId = req.params.id
+
+    await User.findByIdAndUpdate(customerId, {
+      firstName,
+      lastName,
+      email,
+      phone,
+      status
+    })
+
+    res.json({ message: "Customer updated successfully" })
+  } catch (error) {
+    console.error("Error updating customer:", error)
+    res.status(500).json({ error: "Internal server error" })
+  }
+})
+
+// Delete customer (Admin only)
+app.delete("/api/admin/customers/:id", authenticateToken, async (req, res) => {
+  try {
+    if (req.user.userType !== "admin") {
+      return res.status(403).json({ error: "Access denied" })
+    }
+
+    const customerId = req.params.id
+
+    await CustomerProfile.findOneAndDelete({ userId: customerId })
+    await User.findByIdAndDelete(customerId)
+
+    res.json({ message: "Customer deleted successfully" })
+  } catch (error) {
+    console.error("Error deleting customer:", error)
+    res.status(500).json({ error: "Internal server error" })
+  }
+})
+
+// Get all payments (Admin only)
+app.get("/api/admin/payments", authenticateToken, async (req, res) => {
+  try {
+    if (req.user.userType !== "admin") {
+      return res.status(403).json({ error: "Access denied" })
+    }
+
+    const payments = await PaymentOrder.find({})
+      .populate({
+        path: 'applicationId',
+        populate: [
+          { path: 'customerId', select: 'firstName lastName email' },
+          { path: 'countryId', select: 'name' },
+          { path: 'visaTypeId', select: 'name' }
+        ]
+      })
+      .sort({ createdAt: -1 })
+
+    res.json(payments)
+  } catch (error) {
+    console.error("Error fetching payments:", error)
+    res.status(500).json({ error: "Internal server error" })
+  }
+})
+
+// Update application (Admin only)
+app.put("/api/admin/applications/:id", authenticateToken, async (req, res) => {
+  try {
+    if (req.user.userType !== "admin") {
+      return res.status(403).json({ error: "Access denied" })
+    }
+
+    const applicationId = req.params.id
+    const updateData = req.body
+
+    await VisaApplication.findByIdAndUpdate(applicationId, updateData)
+    res.json({ message: "Application updated successfully" })
+  } catch (error) {
+    console.error("Error updating application:", error)
+    res.status(500).json({ error: "Internal server error" })
+  }
+})
+
+// Delete application (Admin only)
+app.delete("/api/admin/applications/:id", authenticateToken, async (req, res) => {
+  try {
+    if (req.user.userType !== "admin") {
+      return res.status(403).json({ error: "Access denied" })
+    }
+
+    const applicationId = req.params.id
+    await VisaApplication.findByIdAndDelete(applicationId)
+    res.json({ message: "Application deleted successfully" })
+  } catch (error) {
+    console.error("Error deleting application:", error)
+    res.status(500).json({ error: "Internal server error" })
+  }
+})
+
+// Get user profile
+app.get("/api/profile", authenticateToken, async (req, res) => {
+  try {
+    console.log("Fetching profile for user:", req.user.userId)
+    const user = await User.findById(req.user.userId)
+    if (!user) {
+      console.log("User not found:", req.user.userId)
+      return res.status(404).json({ error: "User not found" })
+    }
+
+    let profile = null
+    if (user.userType === "customer") {
+      profile = await CustomerProfile.findOne({ userId: req.user.userId })
+      console.log("Customer profile found:", !!profile)
+    } else if (user.userType === "employee") {
+      profile = await EmployeeProfile.findOne({ userId: req.user.userId })
+      console.log("Employee profile found:", !!profile)
+    }
+
+    const response = {
+      user: {
+        id: user._id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        phone: user.phone,
+        userType: user.userType,
+        status: user.status
+      },
+      profile
+    }
+    console.log("Sending profile response:", response)
+    res.json(response)
+  } catch (error) {
+    console.error("Error fetching profile:", error)
+    res.status(500).json({ error: "Internal server error", details: error.message })
+  }
+})
+
+// Update user profile
+app.put("/api/profile", authenticateToken, async (req, res) => {
+  try {
+    console.log("Updating profile for user:", req.user.userId)
+    console.log("Update data:", req.body)
+    const { firstName, lastName, phone, profileData } = req.body
+
+    // Update user basic info
+    const updatedUser = await User.findByIdAndUpdate(req.user.userId, {
+      firstName,
+      lastName,
+      phone
+    }, { new: true })
+    console.log("User updated:", updatedUser)
+
+    // Update profile based on user type
+    if (req.user.userType === "customer" && profileData) {
+      const updatedProfile = await CustomerProfile.findOneAndUpdate(
+        { userId: req.user.userId },
+        profileData,
+        { upsert: true, new: true }
+      )
+      console.log("Customer profile updated:", updatedProfile)
+    } else if (req.user.userType === "employee" && profileData) {
+      const updatedProfile = await EmployeeProfile.findOneAndUpdate(
+        { userId: req.user.userId },
+        profileData,
+        { new: true }
+      )
+      console.log("Employee profile updated:", updatedProfile)
+    }
+
+    res.json({ message: "Profile updated successfully" })
+  } catch (error) {
+    console.error("Error updating profile:", error)
+    res.status(500).json({ error: "Internal server error", details: error.message })
   }
 })
 
@@ -702,8 +1451,8 @@ app.listen(PORT, async () => {
   console.log(`🚀 Server running on port ${PORT}`)
   console.log(`🔍 Health check: http://localhost:${PORT}/api/health`)
 
-  // Test database connection on startup
-  await testDatabaseConnection()
+  // Connect to MongoDB on startup
+  await connectToMongoDB()
 })
 
 export default app

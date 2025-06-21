@@ -10,6 +10,7 @@ interface AuthContextType {
   register: (userData: any) => Promise<void>
   logout: () => void
   loading: boolean
+  initialized: boolean
   error: string | null
 }
 
@@ -18,6 +19,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
+  const [initialized, setInitialized] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -26,20 +28,61 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (token) {
         try {
           const payload = JSON.parse(atob(token.split(".")[1]))
-          setUser({
-            id: payload.userId,
-            email: payload.email,
-            firstName: payload.firstName,
-            lastName: payload.lastName,
-            userType: payload.userType,
-          })
+          if (payload.exp * 1000 > Date.now()) {
+            setUser({
+              id: payload.userId,
+              email: payload.email,
+              firstName: payload.firstName,
+              lastName: payload.lastName,
+              userType: payload.userType,
+            })
+          } else {
+            localStorage.removeItem("auth_token")
+          }
         } catch (err) {
           localStorage.removeItem("auth_token")
         }
       }
     }
     setLoading(false)
+    setInitialized(true)
   }, [])
+ useEffect(() => {
+    console.log(user);
+  }, [user])
+  // Check token validity on page focus and storage changes
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const handleFocus = () => {
+        const token = localStorage.getItem("auth_token")
+        if (token && user) {
+          try {
+            const payload = JSON.parse(atob(token.split(".")[1]))
+            if (payload.exp * 1000 <= Date.now()) {
+              handleLogout()
+            }
+          } catch (err) {
+            handleLogout()
+          }
+        } else if (!token && user) {
+          handleLogout()
+        }
+      }
+
+      const handleStorageChange = (e: StorageEvent) => {
+        if (e.key === "auth_token" && !e.newValue && user) {
+          handleLogout()
+        }
+      }
+
+      window.addEventListener("focus", handleFocus)
+      window.addEventListener("storage", handleStorageChange)
+      return () => {
+        window.removeEventListener("focus", handleFocus)
+        window.removeEventListener("storage", handleStorageChange)
+      }
+    }
+  }, [user])
 
   const handleLogin = async (email: string, password: string) => {
     try {
@@ -69,8 +112,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const handleLogout = () => {
-    apiClient.logout()
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("auth_token")
+    }
+    console.log("logout");
     setUser(null)
+    setError(null)
   }
 
   return (
@@ -81,6 +128,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         register: handleRegister,
         logout: handleLogout,
         loading: loading,
+        initialized: initialized,
         error: error,
       }}
     >

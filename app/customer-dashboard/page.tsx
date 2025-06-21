@@ -13,13 +13,14 @@ import { apiClient, type Application, type DashboardStats } from "@/lib/api"
 
 export default function CustomerDashboard() {
   const router = useRouter()
-  const { user, logout } = useAuth()
+  const { user, logout, initialized } = useAuth()
   const [applications, setApplications] = useState<Application[]>([])
   const [stats, setStats] = useState<DashboardStats>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    if (!initialized) return
     if (!user) {
       router.push("/login")
       return
@@ -31,7 +32,7 @@ export default function CustomerDashboard() {
     }
 
     fetchData()
-  }, [user, router])
+  }, [user, router, initialized])
 
   const fetchData = async () => {
     try {
@@ -149,10 +150,12 @@ export default function CustomerDashboard() {
               <span className="text-sm text-gray-600">
                 Welcome, {user?.firstName} {user?.lastName}
               </span>
-              <Button variant="ghost" size="sm">
-                <User className="h-4 w-4 mr-2" />
-                Profile
-              </Button>
+              <Link href="/profile">
+                <Button variant="ghost" size="sm">
+                  <User className="h-4 w-4 mr-2" />
+                  Profile
+                </Button>
+              </Link>
               <Button variant="ghost" size="sm" onClick={handleLogout}>
                 <LogOut className="h-4 w-4 mr-2" />
                 Logout
@@ -277,9 +280,11 @@ export default function CustomerDashboard() {
                   </div>
 
                   <div className="mt-4 flex space-x-2">
-                    <Button variant="outline" size="sm">
-                      View Details
-                    </Button>
+                    <Link href={`/application-details/${app._id}`}>
+                      <Button variant="outline" size="sm">
+                        View Details
+                      </Button>
+                    </Link>
                     {app.status === "draft" && (
                       <Link href={`/application-form?id=${app.id}`}>
                         <Button size="sm">Continue Application</Button>

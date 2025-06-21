@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Globe, Search, Filter, Eye, CheckCircle, XCircle, RotateCcw, User, LogOut } from "lucide-react"
+import Link from "next/link"
 
 export default function EmployeeDashboard() {
   const router = useRouter()
@@ -44,8 +45,15 @@ export default function EmployeeDashboard() {
         apiClient.getDashboardStats(),
       ])
 
-      setApplications(applicationsData)
-      setStats(statsData)
+      setApplications(applicationsData || [])
+      setStats({
+        pending_review: applicationsData?.filter(app => app.status === "under_review").length || 0,
+        approved_today: applicationsData?.filter(app => 
+          app.status === "approved" && 
+          new Date(app.updated_at).toDateString() === new Date().toDateString()
+        ).length || 0,
+        ...statsData
+      })
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to fetch data")
     } finally {
@@ -100,7 +108,7 @@ export default function EmployeeDashboard() {
   const filteredApplications = applications.filter((app) => {
     const matchesSearch =
       (app.customerName && app.customerName.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      app.id.toString().toLowerCase().includes(searchTerm.toLowerCase())
+      (app.id && app.id.toString().toLowerCase().includes(searchTerm.toLowerCase()))
     const matchesStatus = statusFilter === "all" || app.status.toLowerCase().replace(" ", "-") === statusFilter
     return matchesSearch && matchesStatus
   })
@@ -127,10 +135,12 @@ export default function EmployeeDashboard() {
               <h1 className="text-2xl font-bold text-gray-900">VisaFlow - Employee Portal</h1>
             </div>
             <div className="flex items-center space-x-4">
-              <Button variant="ghost" size="sm">
-                <User className="h-4 w-4 mr-2" />
-                Profile
-              </Button>
+              <Link href="/profile">
+                <Button variant="ghost" size="sm">
+                  <User className="h-4 w-4 mr-2" />
+                  Profile
+                </Button>
+              </Link>
               <Button variant="ghost" size="sm" onClick={handleLogout}>
                 <LogOut className="h-4 w-4 mr-2" />
                 Logout
@@ -260,23 +270,25 @@ export default function EmployeeDashboard() {
                   {filteredApplications.map((app) => (
                     <TableRow key={app.id}>
                       <TableCell className="font-medium">{app.application_number}</TableCell>
-                      <TableCell>{app.customerName || "N/A"}</TableCell>
-                      <TableCell>{app.country_name}</TableCell>
-                      <TableCell>{app.visa_type_name}</TableCell>
+                      <TableCell>{(app.customerId?.firstName && app.customerId?.lastName) ? `${app.customerId.firstName} ${app.customerId.lastName}` : "N/A"}</TableCell>
+                      <TableCell>{app.countryId?.name || app.country_name}</TableCell>
+                      <TableCell>{app.visaTypeId?.name || app.visa_type_name}</TableCell>
                       <TableCell>
                         <Badge className={getStatusColor(app.status)}>{app.status}</Badge>
                       </TableCell>
                       <TableCell>
-                        <Badge className={getPriorityColor(app.priority)}>{app.priority}</Badge>
+                        <Badge className={getPriorityColor(app.priority || "normal")}>{app.priority || "normal"}</Badge>
                       </TableCell>
                       <TableCell>
                         {app.submitted_at ? new Date(app.submitted_at).toLocaleDateString() : "N/A"}
                       </TableCell>
                       <TableCell>
                         <div className="flex space-x-2">
-                          <Button size="sm" variant="outline">
-                            <Eye className="h-4 w-4" />
-                          </Button>
+                          <Link href={`/application-details/employee/${app.id}`}>
+                            <Button size="sm" variant="outline">
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                          </Link>
                           {app.status === "under_review" && (
                             <>
                               <Button
@@ -299,6 +311,19 @@ export default function EmployeeDashboard() {
                                 }}
                               >
                                 <XCircle className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="text-yellow-600"
+                                onClick={() => {
+                                  const reason = prompt("Please provide a reason for requesting more info:")
+                                  if (reason) {
+                                    handleStatusUpdate(app.id, "resent", reason)
+                                  }
+                                }}
+                              >
+                                Request Info
                               </Button>
                             </>
                           )}

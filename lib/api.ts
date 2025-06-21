@@ -93,6 +93,10 @@ class ApiClient {
     return this.request("/applications")
   }
 
+  async getApplication(applicationId: string) {
+    return this.request(`/applications/${applicationId}`)
+  }
+
   async createApplication(applicationData: any) {
     return this.request("/applications", {
       method: "POST",
@@ -103,6 +107,23 @@ class ApiClient {
   async submitApplication(applicationId: string) {
     return this.request(`/applications/${applicationId}/submit`, {
       method: "POST",
+    })
+  }
+
+  async createPaymentOrder(applicationId: string) {
+    return this.request(`/applications/${applicationId}/create-payment`, {
+      method: "POST",
+    })
+  }
+
+  async verifyPayment(applicationId: string, paymentData: {
+    razorpay_payment_id: string
+    razorpay_order_id: string
+    razorpay_signature: string
+  }) {
+    return this.request(`/applications/${applicationId}/verify-payment`, {
+      method: "POST",
+      body: JSON.stringify(paymentData),
     })
   }
 
@@ -143,7 +164,8 @@ class ApiClient {
 
   // Employee management (Admin only)
   async createEmployee(employeeData: {
-    name: string
+    firstName: string
+    lastName: string
     email: string
     role: string
     password: string
@@ -151,6 +173,72 @@ class ApiClient {
     return this.request("/employees", {
       method: "POST",
       body: JSON.stringify(employeeData),
+    })
+  }
+
+  async getEmployees() {
+    return this.request("/admin/employees")
+  }
+
+  async updateEmployee(employeeId: string, employeeData: any) {
+    return this.request(`/admin/employees/${employeeId}`, {
+      method: "PUT",
+      body: JSON.stringify(employeeData),
+    })
+  }
+
+  async deleteEmployee(employeeId: string) {
+    return this.request(`/admin/employees/${employeeId}`, {
+      method: "DELETE",
+    })
+  }
+
+  // Customer management (Admin only)
+  async getCustomers() {
+    return this.request("/admin/customers")
+  }
+
+  async updateCustomer(customerId: string, customerData: any) {
+    return this.request(`/admin/customers/${customerId}`, {
+      method: "PUT",
+      body: JSON.stringify(customerData),
+    })
+  }
+
+  async deleteCustomer(customerId: string) {
+    return this.request(`/admin/customers/${customerId}`, {
+      method: "DELETE",
+    })
+  }
+
+  // Application management (Admin only)
+  async updateApplication(applicationId: string, applicationData: any) {
+    return this.request(`/admin/applications/${applicationId}`, {
+      method: "PUT",
+      body: JSON.stringify(applicationData),
+    })
+  }
+
+  async deleteApplication(applicationId: string) {
+    return this.request(`/admin/applications/${applicationId}`, {
+      method: "DELETE",
+    })
+  }
+
+  // Payment management (Admin only)
+  async getPayments() {
+    return this.request("/admin/payments")
+  }
+
+  // Profile management
+  async getProfile() {
+    return this.request("/profile")
+  }
+
+  async updateProfile(profileData: any) {
+    return this.request("/profile", {
+      method: "PUT",
+      body: JSON.stringify(profileData),
     })
   }
 
@@ -172,22 +260,29 @@ export interface User {
 }
 
 export interface Country {
-  id: number
+  id: string | number
   name: string
   code: string
-  flag_emoji: string
-  processing_time_min: number
-  processing_time_max: number
+  flag_emoji?: string
+  flagEmoji?: string
+  processing_time_min?: number
+  processing_time_max?: number
+  processingTimeMin?: number
+  processingTimeMax?: number
   visa_types: VisaType[]
+  isActive?: boolean
 }
 
 export interface VisaType {
-  id: number
+  id: string | number
   name: string
   description: string
   fee: number
-  processing_time_days: number
-  required_documents: string[]
+  processing_time_days?: number
+  processingTimeDays?: number
+  required_documents?: string[]
+  requiredDocuments?: string[]
+  isActive?: boolean
 }
 
 export interface Application {
@@ -228,8 +323,63 @@ export interface DashboardStats {
   approvedToday?: number
   highPriority?: number
   totalApplications?: number
+  totalCustomers?: number
   activeEmployees?: number
+  totalRevenue?: number
   approvedApplications?: number
   pendingApplications?: number
-  employees?: any[]
+  draftApplications?: number
+  totalPayments?: number
+  employees?: Employee[]
+}
+
+export interface Employee {
+  _id: string
+  firstName: string
+  lastName: string
+  email: string
+  phone?: string
+  status: string
+  role?: string
+  employeeId?: string
+  hireDate?: string
+  createdAt: string
+}
+
+export interface Customer {
+  _id: string
+  firstName: string
+  lastName: string
+  email: string
+  phone?: string
+  status: string
+  nationality?: string
+  country?: string
+  passportNumber?: string
+  createdAt: string
+}
+
+export interface Payment {
+  _id: string
+  applicationId: {
+    applicationNumber: string
+    customerId: {
+      firstName: string
+      lastName: string
+      email: string
+    }
+    countryId: {
+      name: string
+    }
+    visaTypeId: {
+      name: string
+    }
+  }
+  amount: number
+  currency: string
+  status: string
+  razorpayOrderId: string
+  razorpayPaymentId?: string
+  createdAt: string
+  verifiedAt?: string
 }

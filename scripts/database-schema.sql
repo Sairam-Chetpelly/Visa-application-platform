@@ -164,6 +164,20 @@ CREATE TABLE notifications (
     FOREIGN KEY (application_id) REFERENCES visa_applications(id) ON DELETE SET NULL
 );
 
+-- Payment orders for Razorpay integration
+CREATE TABLE payment_orders (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    application_id INT NOT NULL,
+    razorpay_order_id VARCHAR(100) UNIQUE NOT NULL,
+    razorpay_payment_id VARCHAR(100),
+    amount DECIMAL(10,2) NOT NULL,
+    currency VARCHAR(3) DEFAULT 'INR',
+    status ENUM('created', 'paid', 'failed', 'cancelled') DEFAULT 'created',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    verified_at TIMESTAMP NULL,
+    FOREIGN KEY (application_id) REFERENCES visa_applications(id) ON DELETE CASCADE
+);
+
 -- System settings
 CREATE TABLE system_settings (
     id INT PRIMARY KEY AUTO_INCREMENT,
@@ -185,3 +199,5 @@ CREATE INDEX idx_applications_number ON visa_applications(application_number);
 CREATE INDEX idx_documents_application ON application_documents(application_id);
 CREATE INDEX idx_notifications_user ON notifications(user_id);
 CREATE INDEX idx_status_history_application ON application_status_history(application_id);
+CREATE INDEX idx_payment_orders_application ON payment_orders(application_id);
+CREATE INDEX idx_payment_orders_razorpay ON payment_orders(razorpay_order_id);

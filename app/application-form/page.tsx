@@ -13,8 +13,9 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Globe, ArrowLeft, Upload, Save, Send } from "lucide-react"
+import { Globe, ArrowLeft, Upload, Save, Send, CreditCard } from "lucide-react"
 import Link from "next/link"
+import PaymentModal from "@/components/PaymentModal"
 
 export default function ApplicationFormPage() {
   const router = useRouter()
@@ -28,11 +29,16 @@ export default function ApplicationFormPage() {
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState<string | null>(null)
+  const [currentApplicationId, setCurrentApplicationId] = useState<string | null>(null)
+  const [showPaymentModal, setShowPaymentModal] = useState(false)
+  const [paymentData, setPaymentData] = useState<any>(null)
 
   const [formData, setFormData] = useState({
     // Personal Information
-    firstName: "",
-    lastName: "",
+    firstName: user?.firstName || "",
+    lastName: user?.lastName || "",
+    email: user?.email || "",
     dateOfBirth: "",
     placeOfBirth: "",
     nationality: "",
@@ -40,7 +46,6 @@ export default function ApplicationFormPage() {
     maritalStatus: "",
 
     // Contact Information
-    email: "",
     phone: "",
     address: "",
     city: "",
@@ -94,15 +99,25 @@ export default function ApplicationFormPage() {
   const fetchCountryData = async () => {
     try {
       setLoading(true)
+      console.log("Fetching countries for countryId:", countryId)
       const countries = await apiClient.getCountries()
-      const selectedCountry = countries.find((c: Country) => c.id === Number.parseInt(countryId!))
+      console.log("Received countries:", countries)
+      
+      // Handle both string and number IDs
+      const selectedCountry = countries.find((c: Country) => {
+        if (!c.id || !countryId) return false
+        return c.id.toString() === countryId.toString() || c.id === Number.parseInt(countryId)
+      })
 
       if (selectedCountry) {
+        console.log("Selected country:", selectedCountry)
         setCountry(selectedCountry)
       } else {
+        console.log("Country not found for ID:", countryId)
         setError("Country not found")
       }
     } catch (err) {
+      console.error("Error fetching countries:", err)
       setError(err instanceof Error ? err.message : "Failed to fetch country data")
     } finally {
       setLoading(false)
@@ -120,11 +135,36 @@ export default function ApplicationFormPage() {
   const handleSaveDraft = async () => {
     if (!selectedVisaType) {
       setError("Please select a visa type")
-      return
+      return null
+    }
+
+    // Validate required fields
+    const requiredFields = [
+      { field: formData.firstName, name: "First Name" },
+      { field: formData.lastName, name: "Last Name" },
+      { field: formData.dateOfBirth, name: "Date of Birth" },
+      { field: formData.nationality, name: "Nationality" },
+      { field: formData.gender, name: "Gender" },
+      { field: formData.phone, name: "Phone" },
+      { field: formData.address, name: "Address" },
+      { field: formData.city, name: "City" },
+      { field: formData.passportNumber, name: "Passport Number" },
+      { field: formData.passportExpiryDate, name: "Passport Expiry Date" },
+      { field: formData.purposeOfVisit, name: "Purpose of Visit" },
+      { field: formData.intendedArrival, name: "Intended Arrival Date" },
+      { field: formData.intendedDeparture, name: "Intended Departure Date" }
+    ]
+
+    const missingFields = requiredFields.filter(field => !field.field?.trim())
+    if (missingFields.length > 0) {
+      setError(`Please fill in the following required fields: ${missingFields.map(f => f.name).join(', ')}`)
+      return null
     }
 
     try {
       setSubmitting(true)
+      setError(null)
+      
       const applicationData = {
         countryId: country?.id,
         visaTypeId: selectedVisaType.id,
@@ -160,7 +200,7 @@ export default function ApplicationFormPage() {
           occupation: formData.occupation,
           employer: formData.employer,
           employerAddress: formData.employerAddress,
-          monthlyIncome: formData.monthlyIncome,
+          monthlyIncome: Number(formData.monthlyIncome) || 0,
         },
         additionalInfo: {
           previousVisits: formData.previousVisits,
@@ -171,23 +211,81 @@ export default function ApplicationFormPage() {
       }
 
       const response = await apiClient.createApplication(applicationData)
-      alert("Application saved as draft successfully!")
-      router.push("/customer-dashboard")
+      setSuccess("Application saved as draft successfully!")
+      return response.applicationId
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save application")
+      return null
     } finally {
       setSubmitting(false)
     }
   }
 
+  const handlePaymentSuccess = async (paymentResponse: any) => {
+    try {
+      setSubmitting(true)
+      await apiClient.verifyPayment(currentApplicationId!, paymentResponse)
+      setShowPaymentModal(false)
+      setSuccess("Payment successful! Your application has been submitted and is now under review.")
+      
+      // Redirect to dashboard after a delay
+      setTimeout(() => {
+        router.push("/customer-dashboard")
+      }, 3000)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Payment verification failed")
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handlePaymentError = (error: any) => {
+    setShowPaymentModal(false)
+    setError(error.message || "Payment failed. Please try again.")
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setError(null)
+    setSuccess(null)
 
     // First save as draft
-    await handleSaveDraft()
+    const applicationId = await handleSaveDraft()
+    
+    if (!applicationId) {
+      return // Error already set in handleSaveDraft
+    }
 
-    // Then submit if save was successful
-    // You would implement the submit logic here
+    setCurrentApplicationId(applicationId.toString())
+
+    try {
+      // Create payment order
+      const paymentOrder = await apiClient.createPaymentOrder(applicationId.toString())
+      
+      // Check if payment is required
+      if (paymentOrder.paymentRequired === false) {
+        setSuccess("Application submitted successfully! Your application is now under review.")
+        
+        // Redirect to dashboard after a delay
+        setTimeout(() => {
+          router.push("/customer-dashboard")
+        }, 3000)
+      } else {
+        setPaymentData(paymentOrder)
+        setShowPaymentModal(true)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create payment order")
+    }
+  }
+
+  const handleSaveDraftOnly = async () => {
+    const applicationId = await handleSaveDraft()
+    if (applicationId) {
+      setTimeout(() => {
+        router.push("/customer-dashboard")
+      }, 2000)
+    }
   }
 
   return (
@@ -214,6 +312,18 @@ export default function ApplicationFormPage() {
         <div className="mb-8">
           <h2 className="text-3xl font-bold text-gray-900 mb-2">{country?.name} Visa Application</h2>
           <p className="text-gray-600">Complete all sections to submit your visa application.</p>
+          
+          {error && (
+            <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+              <p className="text-red-800">{error}</p>
+            </div>
+          )}
+          
+          {success && (
+            <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+              <p className="text-green-800">{success}</p>
+            </div>
+          )}
         </div>
 
         {country && (
@@ -239,7 +349,7 @@ export default function ApplicationFormPage() {
                       <span className="text-sm font-semibold text-green-600">${visaType.fee}</span>
                     </div>
                     <p className="text-sm text-gray-600 mb-2">{visaType.description}</p>
-                    <p className="text-xs text-gray-500">Processing: {visaType.processing_time_days} days</p>
+                    <p className="text-xs text-gray-500">Processing: {visaType.processing_time_days || visaType.processingTimeDays} days</p>
                   </div>
                 ))}
               </div>
@@ -564,16 +674,32 @@ export default function ApplicationFormPage() {
 
           {/* Form Actions */}
           <div className="flex justify-between">
-            <Button type="button" variant="outline" onClick={handleSaveDraft} disabled={submitting}>
+            <Button type="button" variant="outline" onClick={handleSaveDraftOnly} disabled={submitting}>
               <Save className="h-4 w-4 mr-2" />
               {submitting ? "Saving..." : "Save as Draft"}
             </Button>
-            <Button type="submit" disabled={submitting || !selectedVisaType}>
-              <Send className="h-4 w-4 mr-2" />
-              {submitting ? "Submitting..." : "Submit Application"}
-            </Button>
+            <div className="flex gap-3">
+              {selectedVisaType && (
+                <div className="text-right">
+                  <p className="text-sm text-gray-600">Visa Fee:</p>
+                  <p className="text-lg font-bold text-green-600">${selectedVisaType.fee}</p>
+                </div>
+              )}
+              <Button type="submit" disabled={submitting || !selectedVisaType} className="bg-blue-600 hover:bg-blue-700">
+                <CreditCard className="h-4 w-4 mr-2" />
+                {submitting ? "Processing..." : "Pay & Submit"}
+              </Button>
+            </div>
           </div>
         </form>
+        
+        <PaymentModal
+          isOpen={showPaymentModal}
+          onClose={() => setShowPaymentModal(false)}
+          paymentData={paymentData}
+          onPaymentSuccess={handlePaymentSuccess}
+          onPaymentError={handlePaymentError}
+        />
       </div>
     </div>
   )

@@ -105,11 +105,14 @@ export default function NewApplicationPage() {
               <Card key={country.id} className="cursor-pointer hover:shadow-lg transition-shadow">
                 <CardContent className="p-6" onClick={() => handleCountrySelect(country)}>
                   <div className="flex items-center space-x-3 mb-4">
-                    <span className="text-3xl">{country.flag_emoji}</span>
+                    <span className="text-3xl">{country.flag_emoji || country.flagEmoji}</span>
                     <div>
                       <h3 className="font-semibold text-gray-900">{country.name}</h3>
                       <p className="text-sm text-gray-600">
-                        Processing: {formatProcessingTime(country.processing_time_min, country.processing_time_max)}
+                        Processing: {formatProcessingTime(
+                          country.processing_time_min || country.processingTimeMin || 15, 
+                          country.processing_time_max || country.processingTimeMax || 30
+                        )}
                       </p>
                     </div>
                   </div>
@@ -132,7 +135,7 @@ export default function NewApplicationPage() {
             <Card>
               <CardHeader>
                 <div className="flex items-center space-x-3">
-                  <span className="text-3xl">{selectedCountry.flag_emoji}</span>
+                  <span className="text-3xl">{selectedCountry.flag_emoji || selectedCountry.flagEmoji}</span>
                   <div>
                     <CardTitle className="flex items-center space-x-2">
                       <MapPin className="h-5 w-5" />
@@ -149,7 +152,10 @@ export default function NewApplicationPage() {
                     <div>
                       <h4 className="font-medium text-blue-900">Processing Time</h4>
                       <p className="text-blue-800">
-                        {formatProcessingTime(selectedCountry.processing_time_min, selectedCountry.processing_time_max)}
+                        {formatProcessingTime(
+                          selectedCountry.processing_time_min || selectedCountry.processingTimeMin || 15,
+                          selectedCountry.processing_time_max || selectedCountry.processingTimeMax || 30
+                        )}
                       </p>
                     </div>
                   </div>
@@ -165,7 +171,7 @@ export default function NewApplicationPage() {
                           <span className="text-sm font-semibold text-green-600">${type.fee}</span>
                         </div>
                         <p className="text-sm text-gray-600 mb-2">{type.description}</p>
-                        <p className="text-xs text-gray-500">Processing: {type.processing_time_days} days</p>
+                        <p className="text-xs text-gray-500">Processing: {type.processing_time_days || type.processingTimeDays} days</p>
                       </div>
                     ))}
                   </div>
