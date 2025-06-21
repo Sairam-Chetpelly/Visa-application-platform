@@ -2,24 +2,29 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Globe, Shield, Users, Clock } from "lucide-react"
+import { ThemeToggle } from "@/components/ui/theme-toggle"
 
 export default function HomePage() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 transition-colors duration-300">
       {/* Header */}
-      <header className="bg-white shadow-sm border-b">
+      <header className="bg-white dark:bg-gray-900 shadow-sm border-b dark:border-gray-700">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-4">
             <div className="flex items-center space-x-2">
               <Globe className="h-8 w-8 text-blue-600" />
-              <h1 className="text-2xl font-bold text-gray-900">VisaFlow</h1>
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">VisaFlow</h1>
             </div>
-            <div className="flex space-x-4">
+            <div className="flex items-center space-x-4">
+              <ThemeToggle />
               <Link href="/login">
                 <Button variant="outline">Login</Button>
               </Link>
               <Link href="/register">
                 <Button>Get Started</Button>
+              </Link>
+              <Link href="/notifications-demo">
+                <Button variant="outline">Notifications Demo</Button>
               </Link>
             </div>
           </div>
@@ -29,8 +34,8 @@ export default function HomePage() {
       {/* Hero Section */}
       <section className="py-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h2 className="text-4xl font-bold text-gray-900 mb-6">Streamline Your Visa Application Process</h2>
-          <p className="text-xl text-gray-600 mb-8 max-w-3xl mx-auto">
+          <h2 className="text-4xl font-bold text-gray-900 dark:text-gray-100 mb-6">Streamline Your Visa Application Process</h2>
+          <p className="text-xl text-gray-600 dark:text-gray-300 mb-8 max-w-3xl mx-auto">
             Complete visa applications online, track your progress in real-time, and get expert support throughout your
             journey.
           </p>
@@ -43,9 +48,9 @@ export default function HomePage() {
       </section>
 
       {/* Features Section */}
-      <section className="py-16 bg-white">
+      <section className="py-16 bg-white dark:bg-gray-900 transition-colors duration-300">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <h3 className="text-3xl font-bold text-center text-gray-900 mb-12">Why Choose VisaFlow?</h3>
+          <h3 className="text-3xl font-bold text-center text-gray-900 dark:text-gray-100 mb-12">Why Choose VisaFlow?</h3>
           <div className="grid md:grid-cols-3 gap-8">
             <Card>
               <CardHeader>
@@ -85,9 +90,9 @@ export default function HomePage() {
       </section>
 
       {/* Process Section */}
-      <section className="py-16 bg-gray-50">
+      <section className="py-16 bg-gray-50 dark:bg-gray-800 transition-colors duration-300">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <h3 className="text-3xl font-bold text-center text-gray-900 mb-12">Simple 4-Step Process</h3>
+          <h3 className="text-3xl font-bold text-center text-gray-900 dark:text-gray-100 mb-12">Simple 4-Step Process</h3>
           <div className="grid md:grid-cols-4 gap-8">
             {[
               { step: 1, title: "Register", desc: "Create your account with email and mobile" },
@@ -99,8 +104,8 @@ export default function HomePage() {
                 <div className="w-16 h-16 bg-blue-600 text-white rounded-full flex items-center justify-center text-xl font-bold mx-auto mb-4">
                   {item.step}
                 </div>
-                <h4 className="text-lg font-semibold mb-2">{item.title}</h4>
-                <p className="text-gray-600">{item.desc}</p>
+                <h4 className="text-lg font-semibold mb-2 dark:text-gray-200">{item.title}</h4>
+                <p className="text-gray-600 dark:text-gray-300">{item.desc}</p>
               </div>
             ))}
           </div>
@@ -108,7 +113,7 @@ export default function HomePage() {
       </section>
 
       {/* Footer */}
-      <footer className="bg-gray-900 text-white py-12">
+      <footer className="bg-gray-900 dark:bg-gray-950 text-white py-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid md:grid-cols-4 gap-8">
             <div>

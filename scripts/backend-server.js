@@ -872,24 +872,83 @@ app.post("/api/applications/:id/documents", authenticateToken, upload.array("doc
 app.get("/api/applications", authenticateToken, async (req, res) => {
   try {
     let filter = {}
+    let applications = []
 
     if (req.user.userType === "customer") {
       filter.customerId = req.user.userId
+      applications = await VisaApplication.find(filter)
+        .populate('countryId', 'name')
+        .populate('visaTypeId', 'name fee')
+        .populate('customerId', 'firstName lastName email')
+        .populate('assignedTo', 'firstName lastName')
+        .sort({ createdAt: -1 })
     } else if (req.user.userType === "employee") {
-      filter.$or = [
-        { assignedTo: req.user.userId },
-        { status: "submitted" }
-      ]
+      // Get employee profile to check role and permissions
+      const employeeProfile = await EmployeeProfile.findOne({ userId: req.user.userId })
+      
+      if (!employeeProfile) {
+        return res.status(403).json({ error: "Employee profile not found" })
+      }
+
+      // Filter based on employee role and assignment
+      if (employeeProfile.role === "Senior Processor") {
+        // Senior processors can see all applications
+        filter = {}
+      } else if (employeeProfile.role === "Processor") {
+        // Regular processors see assigned applications and submitted ones
+        filter = {
+          $or: [
+            { assignedTo: req.user.userId },
+            { status: "submitted" },
+            { status: "under_review" }
+          ]
+        }
+      } else {
+        // Junior processors only see their assigned applications
+        filter = { assignedTo: req.user.userId }
+      }
+
+      applications = await VisaApplication.find(filter)
+        .populate('countryId', 'name')
+        .populate('visaTypeId', 'name fee')
+        .populate('customerId', 'firstName lastName email')
+        .populate('assignedTo', 'firstName lastName')
+        .sort({ createdAt: -1 })
+    } else {
+      // Admin sees all applications
+      applications = await VisaApplication.find({})
+        .populate('countryId', 'name')
+        .populate('visaTypeId', 'name fee')
+        .populate('customerId', 'firstName lastName email')
+        .populate('assignedTo', 'firstName lastName')
+        .sort({ createdAt: -1 })
     }
-    // Admin sees all applications (no filter)
 
-    const applications = await VisaApplication.find(filter)
-      .populate('countryId', 'name')
-      .populate('visaTypeId', 'name')
-      .populate('assignedTo', 'firstName lastName')
-      .sort({ createdAt: -1 })
+    // Format applications for frontend compatibility
+    const formattedApplications = applications.map(app => ({
+      id: app._id,
+      _id: app._id,
+      applicationNumber: app.applicationNumber,
+      application_number: app.applicationNumber,
+      customerId: app.customerId,
+      countryId: app.countryId,
+      country_name: app.countryId?.name,
+      visaTypeId: app.visaTypeId,
+      visa_type_name: app.visaTypeId?.name,
+      status: app.status,
+      priority: app.priority || 'normal',
+      assignedTo: app.assignedTo,
+      purposeOfVisit: app.purposeOfVisit,
+      intendedArrivalDate: app.intendedArrivalDate,
+      intendedDepartureDate: app.intendedDepartureDate,
+      submittedAt: app.submittedAt,
+      submitted_at: app.submittedAt,
+      createdAt: app.createdAt,
+      updatedAt: app.updatedAt,
+      updated_at: app.updatedAt
+    }))
 
-    res.json(applications)
+    res.json(formattedApplications)
   } catch (error) {
     console.error("Error fetching applications:", error)
     res.status(500).json({ error: "Internal server error" })
@@ -946,6 +1005,30 @@ app.post("/api/applications/:id/status", authenticateToken, async (req, res) => 
       return res.status(404).json({ error: "Application not found" })
     }
 
+    // Check employee permissions
+    if (req.user.userType === "employee") {
+      const employeeProfile = await EmployeeProfile.findOne({ userId: req.user.userId })
+      
+      if (!employeeProfile) {
+        return res.status(403).json({ error: "Employee profile not found" })
+      }
+
+      // Check if employee can modify this application
+      const canModify = 
+        employeeProfile.role === "Senior Processor" || // Senior can modify all
+        application.assignedTo?.toString() === req.user.userId || // Assigned employee
+        (employeeProfile.role === "Processor" && application.status === "submitted") // Processor can take submitted apps
+
+      if (!canModify) {
+        return res.status(403).json({ error: "You don't have permission to modify this application" })
+      }
+
+      // Auto-assign if not already assigned
+      if (!application.assignedTo && status === "under_review") {
+        await VisaApplication.findByIdAndUpdate(applicationId, { assignedTo: req.user.userId })
+      }
+    }
+
     const oldStatus = application.status
     const customerId = application.customerId
 
@@ -954,10 +1037,15 @@ app.post("/api/applications/:id/status", authenticateToken, async (req, res) => 
 
     if (status === "approved") {
       updateData.approvedAt = new Date()
+      updateData.reviewedAt = new Date()
     } else if (status === "rejected") {
       updateData.rejectionReason = comments
+      updateData.reviewedAt = new Date()
     } else if (status === "resent") {
       updateData.resendReason = comments
+      updateData.status = "resent" // Reset to allow resubmission
+    } else if (status === "under_review") {
+      updateData.reviewedAt = new Date()
     }
 
     await VisaApplication.findByIdAndUpdate(applicationId, updateData)
@@ -976,6 +1064,7 @@ app.post("/api/applications/:id/status", authenticateToken, async (req, res) => 
       approved: "Your visa application has been approved! Please check your email for further instructions.",
       rejected: `Your visa application has been rejected. Reason: ${comments}`,
       resent: `Your visa application requires additional information. Please review and resubmit. Reason: ${comments}`,
+      under_review: "Your visa application is now under review. We will update you on the progress."
     }
 
     if (statusMessages[status]) {
@@ -1058,20 +1147,53 @@ app.get("/api/dashboard/stats", authenticateToken, async (req, res) => {
         draft: applications.filter(app => app.status === 'draft').length
       }
     } else if (req.user.userType === "employee") {
-      const applications = await VisaApplication.find({ assignedTo: req.user.userId })
+      const employeeProfile = await EmployeeProfile.findOne({ userId: req.user.userId })
+      
+      if (!employeeProfile) {
+        return res.status(403).json({ error: "Employee profile not found" })
+      }
+
       const today = new Date()
       today.setHours(0, 0, 0, 0)
       const tomorrow = new Date(today)
       tomorrow.setDate(tomorrow.getDate() + 1)
       
+      let applicationFilter = {}
+      
+      // Filter based on employee role
+      if (employeeProfile.role === "Senior Processor") {
+        // Senior processors see all applications
+        applicationFilter = {}
+      } else if (employeeProfile.role === "Processor") {
+        // Regular processors see assigned + submitted + under_review
+        applicationFilter = {
+          $or: [
+            { assignedTo: req.user.userId },
+            { status: "submitted" },
+            { status: "under_review" }
+          ]
+        }
+      } else {
+        // Junior processors only see assigned
+        applicationFilter = { assignedTo: req.user.userId }
+      }
+
+      const applications = await VisaApplication.find(applicationFilter)
+      const assignedApplications = await VisaApplication.find({ assignedTo: req.user.userId })
+      
       stats = {
-        assigned_applications: applications.length,
+        total_applications: applications.length,
+        assigned_applications: assignedApplications.length,
         pending_review: applications.filter(app => app.status === 'under_review').length,
-        approved_today: applications.filter(app => 
+        approved_today: assignedApplications.filter(app => 
           app.status === 'approved' && 
           app.approvedAt >= today && 
           app.approvedAt < tomorrow
-        ).length
+        ).length,
+        submitted_applications: applications.filter(app => app.status === 'submitted').length,
+        high_priority: applications.filter(app => app.priority === 'high').length,
+        role: employeeProfile.role,
+        employeeId: employeeProfile.employeeId
       }
     } else if (req.user.userType === "admin") {
       const totalApplications = await VisaApplication.countDocuments()
@@ -1085,31 +1207,6 @@ app.get("/api/dashboard/stats", authenticateToken, async (req, res) => {
       const paidOrders = await PaymentOrder.find({ status: 'paid' })
       const totalRevenue = paidOrders.reduce((sum, order) => sum + order.amount, 0)
       
-      // Get employees with profiles
-      const employees = await User.aggregate([
-        {
-          $match: { userType: 'employee' }
-        },
-        {
-          $lookup: {
-            from: 'employeeprofiles',
-            localField: '_id',
-            foreignField: 'userId',
-            as: 'profile'
-          }
-        },
-        {
-          $project: {
-            firstName: 1,
-            lastName: 1,
-            email: 1,
-            status: 1,
-            role: { $arrayElemAt: ['$profile.role', 0] },
-            employeeId: { $arrayElemAt: ['$profile.employeeId', 0] }
-          }
-        }
-      ])
-      
       stats = {
         totalApplications,
         totalCustomers,
@@ -1118,8 +1215,7 @@ app.get("/api/dashboard/stats", authenticateToken, async (req, res) => {
         pendingApplications: pendingReview,
         approvedApplications: await VisaApplication.countDocuments({ status: 'approved' }),
         draftApplications,
-        totalPayments,
-        employees
+        totalPayments
       }
     }
 
@@ -1299,6 +1395,313 @@ app.delete("/api/admin/customers/:id", authenticateToken, async (req, res) => {
     res.json({ message: "Customer deleted successfully" })
   } catch (error) {
     console.error("Error deleting customer:", error)
+    res.status(500).json({ error: "Internal server error" })
+  }
+})
+
+// Employee Profile Management
+app.get("/api/profile", authenticateToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.userId)
+    if (!user) {
+      return res.status(404).json({ error: "User not found" })
+    }
+
+    let profile = null
+    
+    if (user.userType === "customer") {
+      profile = await CustomerProfile.findOne({ userId: req.user.userId })
+    } else if (user.userType === "employee") {
+      profile = await EmployeeProfile.findOne({ userId: req.user.userId })
+    }
+
+    res.json({
+      user: {
+        id: user._id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        phone: user.phone,
+        userType: user.userType,
+        status: user.status
+      },
+      profile: profile || {}
+    })
+  } catch (error) {
+    console.error("Error fetching profile:", error)
+    res.status(500).json({ error: "Internal server error" })
+  }
+})
+
+app.put("/api/profile", authenticateToken, async (req, res) => {
+  try {
+    const { firstName, lastName, phone, profileData } = req.body
+
+    // Update user basic info
+    await User.findByIdAndUpdate(req.user.userId, {
+      firstName,
+      lastName,
+      phone
+    })
+
+    // Update profile data based on user type
+    if (req.user.userType === "customer") {
+      await CustomerProfile.findOneAndUpdate(
+        { userId: req.user.userId },
+        profileData,
+        { upsert: true }
+      )
+    } else if (req.user.userType === "employee") {
+      // Employees can only update limited profile fields
+      const allowedFields = {
+        department: profileData.department,
+        // Add other allowed fields as needed
+      }
+      
+      await EmployeeProfile.findOneAndUpdate(
+        { userId: req.user.userId },
+        allowedFields,
+        { upsert: false }
+      )
+    }
+
+    res.json({ message: "Profile updated successfully" })
+  } catch (error) {
+    console.error("Error updating profile:", error)
+    res.status(500).json({ error: "Internal server error" })
+  }
+})
+
+// Employee Work Assignment
+app.post("/api/applications/:id/assign", authenticateToken, async (req, res) => {
+  try {
+    if (req.user.userType !== "admin" && req.user.userType !== "employee") {
+      return res.status(403).json({ error: "Access denied" })
+    }
+
+    const applicationId = req.params.id
+    const { employeeId } = req.body
+
+    // Verify employee exists and is active
+    const employee = await User.findOne({ 
+      _id: employeeId, 
+      userType: "employee", 
+      status: "active" 
+    })
+    
+    if (!employee) {
+      return res.status(400).json({ error: "Invalid employee selected" })
+    }
+
+    // Check if employee can take more assignments (optional workload management)
+    const employeeProfile = await EmployeeProfile.findOne({ userId: employeeId })
+    const currentAssignments = await VisaApplication.countDocuments({ 
+      assignedTo: employeeId, 
+      status: { $in: ["under_review", "submitted"] } 
+    })
+
+    // Set workload limits based on role
+    const workloadLimits = {
+      "Senior Processor": 20,
+      "Processor": 15,
+      "Junior Processor": 10
+    }
+
+    const maxAssignments = workloadLimits[employeeProfile?.role] || 10
+    
+    if (currentAssignments >= maxAssignments) {
+      return res.status(400).json({ 
+        error: `Employee has reached maximum workload (${maxAssignments} applications)` 
+      })
+    }
+
+    // Assign application
+    await VisaApplication.findByIdAndUpdate(applicationId, {
+      assignedTo: employeeId,
+      status: "under_review"
+    })
+
+    // Add status history
+    await new ApplicationStatusHistory({
+      applicationId,
+      oldStatus: "submitted",
+      newStatus: "under_review",
+      changedBy: req.user.userId,
+      comments: `Assigned to ${employee.firstName} ${employee.lastName}`
+    }).save()
+
+    // Notify assigned employee
+    await sendNotification(
+      employeeId,
+      "email",
+      "New Application Assigned",
+      `A new visa application has been assigned to you for review.`,
+      applicationId
+    )
+
+    res.json({ message: "Application assigned successfully" })
+  } catch (error) {
+    console.error("Error assigning application:", error)
+    res.status(500).json({ error: "Internal server error" })
+  }
+})
+
+// Employee Performance Analytics
+app.get("/api/employee/performance", authenticateToken, async (req, res) => {
+  try {
+    if (req.user.userType !== "employee") {
+      return res.status(403).json({ error: "Access denied" })
+    }
+
+    const employeeId = req.user.userId
+    const today = new Date()
+    const thirtyDaysAgo = new Date(today.getTime() - (30 * 24 * 60 * 60 * 1000))
+    const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+    const endOfToday = new Date(startOfToday.getTime() + (24 * 60 * 60 * 1000))
+
+    // Get employee profile
+    const employeeProfile = await EmployeeProfile.findOne({ userId: employeeId })
+    if (!employeeProfile) {
+      return res.status(404).json({ error: "Employee profile not found" })
+    }
+
+    // Get all applications assigned to this employee
+    const allAssignedApplications = await VisaApplication.find({ assignedTo: employeeId })
+    
+    // Get applications processed by this employee (status changed by them)
+    const processedApplications = await ApplicationStatusHistory.find({ changedBy: employeeId })
+      .populate('applicationId')
+    
+    // Calculate metrics
+    const totalProcessed = processedApplications.length
+    const approvedCount = processedApplications.filter(history => 
+      history.newStatus === 'approved'
+    ).length
+    const rejectedCount = processedApplications.filter(history => 
+      history.newStatus === 'rejected'
+    ).length
+    
+    // Recent activity (last 30 days)
+    const recentProcessed = processedApplications.filter(history => 
+      history.createdAt >= thirtyDaysAgo
+    ).length
+    
+    // Current assignments (applications currently assigned and not completed)
+    const currentAssignments = allAssignedApplications.filter(app => 
+      ['submitted', 'under_review'].includes(app.status)
+    ).length
+    
+    // Calculate approval rate
+    const totalDecisions = approvedCount + rejectedCount
+    const approvalRate = totalDecisions > 0 ? Math.round((approvedCount / totalDecisions) * 100) : 0
+    
+    // Calculate average processing time
+    const completedApplications = allAssignedApplications.filter(app => 
+      ['approved', 'rejected'].includes(app.status) && app.submittedAt && app.reviewedAt
+    )
+    
+    let avgProcessingTime = 0
+    if (completedApplications.length > 0) {
+      const totalProcessingTime = completedApplications.reduce((sum, app) => {
+        const processingTime = Math.ceil((app.reviewedAt - app.submittedAt) / (1000 * 60 * 60 * 24))
+        return sum + processingTime
+      }, 0)
+      avgProcessingTime = Math.round(totalProcessingTime / completedApplications.length)
+    }
+    
+    // Performance data
+    const performanceData = {
+      totalProcessed,
+      approvedCount,
+      rejectedCount,
+      currentAssignments,
+      recentProcessed,
+      approvalRate,
+      avgProcessingTime,
+      role: employeeProfile.role,
+      employeeId: employeeProfile.employeeId,
+      hireDate: employeeProfile.hireDate,
+      // Additional metrics
+      totalAssigned: allAssignedApplications.length,
+      pendingReview: allAssignedApplications.filter(app => app.status === 'under_review').length,
+      completedToday: processedApplications.filter(history => 
+        history.createdAt >= startOfToday && history.createdAt < endOfToday &&
+        ['approved', 'rejected'].includes(history.newStatus)
+      ).length
+    }
+
+    res.json(performanceData)
+  } catch (error) {
+    console.error("Error fetching employee performance:", error)
+    res.status(500).json({ error: "Internal server error" })
+  }
+})
+
+// Bulk Application Operations (Employee/Admin)
+app.post("/api/applications/bulk-action", authenticateToken, async (req, res) => {
+  try {
+    if (req.user.userType === "customer") {
+      return res.status(403).json({ error: "Access denied" })
+    }
+
+    const { applicationIds, action, comments } = req.body
+
+    if (!applicationIds || !Array.isArray(applicationIds) || applicationIds.length === 0) {
+      return res.status(400).json({ error: "Application IDs are required" })
+    }
+
+    const validActions = ["approve", "reject", "assign_to_me", "set_priority"]
+    if (!validActions.includes(action)) {
+      return res.status(400).json({ error: "Invalid action" })
+    }
+
+    let updateData = {}
+    let newStatus = null
+
+    switch (action) {
+      case "approve":
+        updateData = { status: "approved", approvedAt: new Date(), reviewedAt: new Date() }
+        newStatus = "approved"
+        break
+      case "reject":
+        updateData = { status: "rejected", rejectionReason: comments, reviewedAt: new Date() }
+        newStatus = "rejected"
+        break
+      case "assign_to_me":
+        updateData = { assignedTo: req.user.userId, status: "under_review" }
+        newStatus = "under_review"
+        break
+      case "set_priority":
+        updateData = { priority: comments || "high" }
+        break
+    }
+
+    // Update applications
+    const result = await VisaApplication.updateMany(
+      { _id: { $in: applicationIds } },
+      updateData
+    )
+
+    // Add status history for each application
+    if (newStatus) {
+      const historyPromises = applicationIds.map(appId => 
+        new ApplicationStatusHistory({
+          applicationId: appId,
+          oldStatus: "under_review", // Simplified - in production, get actual old status
+          newStatus,
+          changedBy: req.user.userId,
+          comments: comments || `Bulk action: ${action}`
+        }).save()
+      )
+      await Promise.all(historyPromises)
+    }
+
+    res.json({ 
+      message: `Bulk action completed successfully`,
+      modifiedCount: result.modifiedCount
+    })
+  } catch (error) {
+    console.error("Error performing bulk action:", error)
     res.status(500).json({ error: "Internal server error" })
   }
 })

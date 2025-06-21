@@ -3,12 +3,14 @@
 import { useState, useEffect } from "react"
 import { useRouter, useParams } from "next/navigation"
 import { useAuth } from "@/hooks/useAuth"
+import { useToast } from "@/hooks/useToast"
 import { apiClient } from "@/lib/api"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
+import { AlertWithIcon } from "@/components/ui/alert"
 import { Globe, ArrowLeft, User, MapPin, Calendar, FileText, CheckCircle, XCircle } from "lucide-react"
 import Link from "next/link"
 
@@ -16,6 +18,7 @@ export default function EmployeeApplicationDetailsPage() {
   const router = useRouter()
   const params = useParams()
   const { user } = useAuth()
+  const { toast } = useToast()
   const [application, setApplication] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -56,9 +59,18 @@ export default function EmployeeApplicationDetailsPage() {
       await apiClient.updateApplicationStatus(params.id as string, status, comments)
       await fetchApplicationDetails()
       setComments("")
-      alert("Application status updated successfully!")
+      toast({
+        variant: "success",
+        title: "Status Updated",
+        description: "Application status has been updated successfully!"
+      })
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to update status")
+      const errorMessage = err instanceof Error ? err.message : "Failed to update status"
+      toast({
+        variant: "destructive",
+        title: "Update Failed",
+        description: errorMessage
+      })
     } finally {
       setUpdating(false)
     }
@@ -92,10 +104,17 @@ export default function EmployeeApplicationDetailsPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-red-600 mb-4">{error}</p>
-          <Button onClick={fetchApplicationDetails}>Retry</Button>
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="max-w-md w-full">
+          <AlertWithIcon 
+            variant="destructive" 
+            title="Application Error"
+            description={error}
+            className="mb-4"
+          />
+          <Button onClick={fetchApplicationDetails} className="w-full">
+            Retry Loading
+          </Button>
         </div>
       </div>
     )

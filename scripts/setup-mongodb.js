@@ -8,6 +8,7 @@ import {
   Country,
   VisaType,
   VisaApplication,
+  ApplicationStatusHistory,
   SystemSettings
 } from './mongodb-models.js'
 import dotenv from 'dotenv'
@@ -31,6 +32,7 @@ async function setupMongoDB() {
       Country.deleteMany({}),
       VisaType.deleteMany({}),
       VisaApplication.deleteMany({}),
+      ApplicationStatusHistory.deleteMany({}),
       SystemSettings.deleteMany({})
     ])
 
@@ -184,7 +186,7 @@ async function setupMongoDB() {
     console.log('📄 Creating sample applications...')
     const insertedVisaTypes = await VisaType.find({})
     
-    await new VisaApplication({
+    const app1 = await new VisaApplication({
       applicationNumber: 'APP001',
       customerId: john._id,
       countryId: countries[0]._id,
@@ -198,7 +200,7 @@ async function setupMongoDB() {
       submittedAt: new Date('2024-01-15T10:30:00')
     }).save()
 
-    await new VisaApplication({
+    const app2 = await new VisaApplication({
       applicationNumber: 'APP002',
       customerId: sarah._id,
       countryId: countries[1]._id,
@@ -210,7 +212,67 @@ async function setupMongoDB() {
       intendedArrivalDate: new Date('2024-02-20'),
       intendedDepartureDate: new Date('2024-02-28'),
       submittedAt: new Date('2024-01-18T14:20:00'),
-      approvedAt: new Date('2024-01-25T16:45:00')
+      approvedAt: new Date('2024-01-25T16:45:00'),
+      reviewedAt: new Date('2024-01-25T16:45:00')
+    }).save()
+
+    const app3 = await new VisaApplication({
+      applicationNumber: 'APP003',
+      customerId: john._id,
+      countryId: countries[2]._id,
+      visaTypeId: insertedVisaTypes[8]._id,
+      status: 'rejected',
+      priority: 'normal',
+      assignedTo: alice._id,
+      purposeOfVisit: 'Student visa application',
+      intendedArrivalDate: new Date('2024-09-01'),
+      intendedDepartureDate: new Date('2025-06-30'),
+      submittedAt: new Date('2024-01-20T09:15:00'),
+      reviewedAt: new Date('2024-01-28T14:30:00'),
+      rejectionReason: 'Insufficient financial documentation'
+    }).save()
+
+    const app4 = await new VisaApplication({
+      applicationNumber: 'APP004',
+      customerId: sarah._id,
+      countryId: countries[0]._id,
+      visaTypeId: insertedVisaTypes[1]._id,
+      status: 'approved',
+      priority: 'normal',
+      assignedTo: alice._id,
+      purposeOfVisit: 'Business conference',
+      intendedArrivalDate: new Date('2024-04-10'),
+      intendedDepartureDate: new Date('2024-04-20'),
+      submittedAt: new Date('2024-02-01T11:00:00'),
+      approvedAt: new Date('2024-02-05T15:30:00'),
+      reviewedAt: new Date('2024-02-05T15:30:00')
+    }).save()
+
+    // Create application status history for performance tracking
+    console.log('📊 Creating application status history...')
+    
+    await new ApplicationStatusHistory({
+      applicationId: app2._id,
+      oldStatus: 'under_review',
+      newStatus: 'approved',
+      changedBy: bob._id,
+      comments: 'All documents verified and approved'
+    }).save()
+
+    await new ApplicationStatusHistory({
+      applicationId: app3._id,
+      oldStatus: 'under_review',
+      newStatus: 'rejected',
+      changedBy: alice._id,
+      comments: 'Insufficient financial documentation'
+    }).save()
+
+    await new ApplicationStatusHistory({
+      applicationId: app4._id,
+      oldStatus: 'under_review',
+      newStatus: 'approved',
+      changedBy: alice._id,
+      comments: 'Application approved after document review'
     }).save()
 
     // Insert system settings
@@ -229,6 +291,7 @@ async function setupMongoDB() {
     console.log(`   - Visa Types: ${await VisaType.countDocuments()}`)
     console.log(`   - Users: ${await User.countDocuments()}`)
     console.log(`   - Applications: ${await VisaApplication.countDocuments()}`)
+    console.log(`   - Status History: ${await ApplicationStatusHistory.countDocuments()}`)
     console.log(`   - Settings: ${await SystemSettings.countDocuments()}`)
     
     console.log('\n📝 Default login credentials:')

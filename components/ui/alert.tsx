@@ -1,5 +1,8 @@
+"use client"
+
 import * as React from "react"
 import { cva, type VariantProps } from "class-variance-authority"
+import { AlertCircle, CheckCircle, Info, AlertTriangle } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
@@ -11,6 +14,12 @@ const alertVariants = cva(
         default: "bg-background text-foreground",
         destructive:
           "border-destructive/50 text-destructive dark:border-destructive [&>svg]:text-destructive",
+        success:
+          "border-green-200 bg-green-50 text-green-900 dark:border-green-800 dark:bg-green-900/20 dark:text-green-100 [&>svg]:text-green-600 dark:[&>svg]:text-green-400",
+        warning:
+          "border-yellow-200 bg-yellow-50 text-yellow-900 dark:border-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-100 [&>svg]:text-yellow-600 dark:[&>svg]:text-yellow-400",
+        info:
+          "border-blue-200 bg-blue-50 text-blue-900 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-100 [&>svg]:text-blue-600 dark:[&>svg]:text-blue-400",
       },
     },
     defaultVariants: {
@@ -56,4 +65,41 @@ const AlertDescription = React.forwardRef<
 ))
 AlertDescription.displayName = "AlertDescription"
 
-export { Alert, AlertTitle, AlertDescription }
+// Helper component for different alert types
+interface AlertWithIconProps extends React.HTMLAttributes<HTMLDivElement> {
+  variant?: "default" | "destructive" | "success" | "warning" | "info"
+  title?: string
+  description?: string
+  children?: React.ReactNode
+}
+
+const AlertWithIcon = React.forwardRef<HTMLDivElement, AlertWithIconProps>(
+  ({ variant = "default", title, description, children, className, ...props }, ref) => {
+    const getIcon = () => {
+      switch (variant) {
+        case "destructive":
+          return <AlertCircle className="h-4 w-4" />
+        case "success":
+          return <CheckCircle className="h-4 w-4" />
+        case "warning":
+          return <AlertTriangle className="h-4 w-4" />
+        case "info":
+          return <Info className="h-4 w-4" />
+        default:
+          return <Info className="h-4 w-4" />
+      }
+    }
+
+    return (
+      <Alert ref={ref} variant={variant} className={className} {...props}>
+        {getIcon()}
+        {title && <AlertTitle>{title}</AlertTitle>}
+        {description && <AlertDescription>{description}</AlertDescription>}
+        {children}
+      </Alert>
+    )
+  }
+)
+AlertWithIcon.displayName = "AlertWithIcon"
+
+export { Alert, AlertTitle, AlertDescription, AlertWithIcon }

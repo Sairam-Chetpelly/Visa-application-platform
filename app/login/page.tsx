@@ -5,16 +5,20 @@ import type React from "react"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/hooks/useAuth"
+import { useToast } from "@/hooks/useToast"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { AlertWithIcon } from "@/components/ui/alert"
 import { Globe, ArrowLeft } from "lucide-react"
+import { ThemeToggle } from "@/components/ui/theme-toggle"
 
 export default function LoginPage() {
   const router = useRouter()
   const { login, loading, error } = useAuth()
+  const { toast } = useToast()
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -28,25 +32,39 @@ export default function LoginPage() {
     try {
       await login(formData.email, formData.password)
 
+      toast({
+        variant: "success",
+        title: "Login Successful",
+        description: "Welcome back! Redirecting to your dashboard..."
+      })
+
       // Redirect based on user type (you'll get this from the login response)
       const token = localStorage.getItem("auth_token")
       if (token) {
         const payload = JSON.parse(atob(token.split(".")[1]))
         const userType = payload.userType
 
-        switch (userType) {
-          case "admin":
-            router.push("/admin-dashboard")
-            break
-          case "employee":
-            router.push("/employee-dashboard")
-            break
-          default:
-            router.push("/customer-dashboard")
-        }
+        setTimeout(() => {
+          switch (userType) {
+            case "admin":
+              router.push("/admin-dashboard")
+              break
+            case "employee":
+              router.push("/employee-dashboard")
+              break
+            default:
+              router.push("/customer-dashboard")
+          }
+        }, 1000)
       }
     } catch (err) {
-      setSubmitError(err instanceof Error ? err.message : "Login failed")
+      const errorMessage = err instanceof Error ? err.message : "Login failed"
+      setSubmitError(errorMessage)
+      toast({
+        variant: "destructive",
+        title: "Login Failed",
+        description: errorMessage
+      })
     }
   }
 
@@ -55,13 +73,16 @@ export default function LoginPage() {
       <div className="w-full max-w-md">
         {/* Header */}
         <div className="text-center mb-8">
-          <Link href="/" className="inline-flex items-center text-blue-600 hover:text-blue-700 mb-4">
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Home
-          </Link>
+          <div className="flex justify-between items-center mb-4">
+            <Link href="/" className="inline-flex items-center text-blue-600 hover:text-blue-700">
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to Home
+            </Link>
+            <ThemeToggle />
+          </div>
           <div className="flex items-center justify-center space-x-2 mb-4">
             <Globe className="h-8 w-8 text-blue-600" />
-            <h1 className="text-2xl font-bold text-gray-900">VisaFlow</h1>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">VisaFlow</h1>
           </div>
         </div>
 
@@ -73,9 +94,12 @@ export default function LoginPage() {
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
               {(error || submitError) && (
-                <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
-                  {error || submitError}
-                </div>
+                <AlertWithIcon 
+                  variant="destructive" 
+                  title="Login Error"
+                  description={error || submitError}
+                  className="mb-4"
+                />
               )}
               <div className="space-y-2">
                 <Label htmlFor="email">Email Address</Label>

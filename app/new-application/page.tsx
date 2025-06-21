@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Globe, ArrowLeft, MapPin, Info } from "lucide-react"
 import { useAuth } from "@/hooks/useAuth"
 import { apiClient, type Country } from "@/lib/api"
+import { ThemeToggle } from "@/components/ui/theme-toggle"
 
 export default function NewApplicationPage() {
   const router = useRouter()
@@ -83,12 +84,15 @@ export default function NewApplicationPage() {
               <Globe className="h-8 w-8 text-blue-600" />
               <h1 className="text-2xl font-bold text-gray-900">VisaFlow</h1>
             </div>
-            <Link href="/customer-dashboard">
-              <Button variant="ghost">
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Back to Dashboard
-              </Button>
-            </Link>
+            <div className="flex items-center space-x-4">
+              <ThemeToggle />
+              <Link href="/customer-dashboard">
+                <Button variant="ghost">
+                  <ArrowLeft className="h-4 w-4 mr-2" />
+                  Back to Dashboard
+                </Button>
+              </Link>
+            </div>
           </div>
         </div>
       </header>

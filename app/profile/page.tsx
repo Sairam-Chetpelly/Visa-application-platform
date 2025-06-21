@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/hooks/useAuth"
+import { useToast } from "@/hooks/useToast"
 import { apiClient } from "@/lib/api"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -10,14 +11,18 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
+import { AlertWithIcon } from "@/components/ui/alert"
 import { ArrowLeft, User, Save } from "lucide-react"
+import { ThemeToggle } from "@/components/ui/theme-toggle"
 
 export default function ProfilePage() {
   const router = useRouter()
   const { user, initialized } = useAuth()
+  const { toast } = useToast()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [profile, setProfile] = useState<any>(null)
+  const [error, setError] = useState<string | null>(null)
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
@@ -51,7 +56,13 @@ export default function ProfilePage() {
       })
     } catch (error) {
       console.error("Error fetching profile:", error)
-      alert("Failed to load profile: " + (error instanceof Error ? error.message : "Unknown error"))
+      const errorMessage = "Failed to load profile: " + (error instanceof Error ? error.message : "Unknown error")
+      setError(errorMessage)
+      toast({
+        variant: "destructive",
+        title: "Profile Load Failed",
+        description: errorMessage
+      })
     } finally {
       setLoading(false)
     }
@@ -63,11 +74,20 @@ export default function ProfilePage() {
       setSaving(true)
       console.log("Saving profile data:", formData)
       await apiClient.updateProfile(formData)
-      alert("Profile updated successfully!")
+      toast({
+        variant: "success",
+        title: "Profile Updated",
+        description: "Your profile has been updated successfully!"
+      })
       await fetchProfile()
     } catch (error) {
       console.error("Profile update error:", error)
-      alert(error instanceof Error ? error.message : "Failed to update profile")
+      const errorMessage = error instanceof Error ? error.message : "Failed to update profile"
+      toast({
+        variant: "destructive",
+        title: "Update Failed",
+        description: errorMessage
+      })
     } finally {
       setSaving(false)
     }
@@ -98,19 +118,31 @@ export default function ProfilePage() {
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-4xl mx-auto py-8 px-4">
         <div className="mb-6">
-          <Button variant="ghost" onClick={() => router.back()} className="mb-4">
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back
-          </Button>
+          <div className="flex justify-between items-center mb-4">
+            <Button variant="ghost" onClick={() => router.back()}>
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back
+            </Button>
+            <ThemeToggle />
+          </div>
           <div className="flex items-center space-x-3">
             <User className="h-8 w-8 text-blue-600" />
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">My Profile</h1>
-              <p className="text-gray-600">Manage your account information</p>
+              <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">My Profile</h1>
+              <p className="text-gray-600 dark:text-gray-300">Manage your account information</p>
             </div>
           </div>
         </div>
 
+        {error && (
+          <AlertWithIcon 
+            variant="destructive" 
+            title="Error"
+            description={error}
+            className="mb-6"
+          />
+        )}
+        
         <form onSubmit={handleSave} className="space-y-6">
           <Card>
             <CardHeader>

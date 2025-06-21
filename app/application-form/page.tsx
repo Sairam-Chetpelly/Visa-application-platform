@@ -5,6 +5,7 @@ import type React from "react"
 import { useState, useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useAuth } from "@/hooks/useAuth"
+import { useToast } from "@/hooks/useToast"
 import { apiClient, type Country, type VisaType } from "@/lib/api"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -13,14 +14,17 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
+import { AlertWithIcon } from "@/components/ui/alert"
 import { Globe, ArrowLeft, Upload, Save, Send, CreditCard } from "lucide-react"
 import Link from "next/link"
 import PaymentModal from "@/components/PaymentModal"
+import { ThemeToggle } from "@/components/ui/theme-toggle"
 
 export default function ApplicationFormPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { user } = useAuth()
+  const { toast } = useToast()
   const countryId = searchParams.get("country")
   const applicationId = searchParams.get("id")
 
@@ -211,10 +215,21 @@ export default function ApplicationFormPage() {
       }
 
       const response = await apiClient.createApplication(applicationData)
+      toast({
+        variant: "success",
+        title: "Draft Saved",
+        description: "Application has been saved as draft successfully!"
+      })
       setSuccess("Application saved as draft successfully!")
       return response.applicationId
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save application")
+      const errorMessage = err instanceof Error ? err.message : "Failed to save application"
+      setError(errorMessage)
+      toast({
+        variant: "destructive",
+        title: "Save Failed",
+        description: errorMessage
+      })
       return null
     } finally {
       setSubmitting(false)
@@ -226,6 +241,11 @@ export default function ApplicationFormPage() {
       setSubmitting(true)
       await apiClient.verifyPayment(currentApplicationId!, paymentResponse)
       setShowPaymentModal(false)
+      toast({
+        variant: "success",
+        title: "Payment Successful!",
+        description: "Your application has been submitted and is now under review."
+      })
       setSuccess("Payment successful! Your application has been submitted and is now under review.")
       
       // Redirect to dashboard after a delay
@@ -233,7 +253,13 @@ export default function ApplicationFormPage() {
         router.push("/customer-dashboard")
       }, 3000)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Payment verification failed")
+      const errorMessage = err instanceof Error ? err.message : "Payment verification failed"
+      setError(errorMessage)
+      toast({
+        variant: "destructive",
+        title: "Payment Failed",
+        description: errorMessage
+      })
     } finally {
       setSubmitting(false)
     }
@@ -241,7 +267,13 @@ export default function ApplicationFormPage() {
 
   const handlePaymentError = (error: any) => {
     setShowPaymentModal(false)
-    setError(error.message || "Payment failed. Please try again.")
+    const errorMessage = error.message || "Payment failed. Please try again."
+    setError(errorMessage)
+    toast({
+      variant: "destructive",
+      title: "Payment Error",
+      description: errorMessage
+    })
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -264,6 +296,11 @@ export default function ApplicationFormPage() {
       
       // Check if payment is required
       if (paymentOrder.paymentRequired === false) {
+        toast({
+          variant: "success",
+          title: "Application Submitted!",
+          description: "Your application is now under review."
+        })
         setSuccess("Application submitted successfully! Your application is now under review.")
         
         // Redirect to dashboard after a delay
@@ -275,7 +312,13 @@ export default function ApplicationFormPage() {
         setShowPaymentModal(true)
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create payment order")
+      const errorMessage = err instanceof Error ? err.message : "Failed to create payment order"
+      setError(errorMessage)
+      toast({
+        variant: "destructive",
+        title: "Submission Failed",
+        description: errorMessage
+      })
     }
   }
 
@@ -298,12 +341,15 @@ export default function ApplicationFormPage() {
               <Globe className="h-8 w-8 text-blue-600" />
               <h1 className="text-2xl font-bold text-gray-900">VisaFlow</h1>
             </div>
-            <Link href="/new-application">
-              <Button variant="ghost">
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Back
-              </Button>
-            </Link>
+            <div className="flex items-center space-x-4">
+              <ThemeToggle />
+              <Link href="/new-application">
+                <Button variant="ghost">
+                  <ArrowLeft className="h-4 w-4 mr-2" />
+                  Back
+                </Button>
+              </Link>
+            </div>
           </div>
         </div>
       </header>
@@ -314,15 +360,21 @@ export default function ApplicationFormPage() {
           <p className="text-gray-600">Complete all sections to submit your visa application.</p>
           
           {error && (
-            <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
-              <p className="text-red-800">{error}</p>
-            </div>
+            <AlertWithIcon 
+              variant="destructive" 
+              title="Error"
+              description={error}
+              className="mt-4"
+            />
           )}
           
           {success && (
-            <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
-              <p className="text-green-800">{success}</p>
-            </div>
+            <AlertWithIcon 
+              variant="success" 
+              title="Success"
+              description={success}
+              className="mt-4"
+            />
           )}
         </div>
 

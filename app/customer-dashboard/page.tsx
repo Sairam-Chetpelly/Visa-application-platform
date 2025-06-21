@@ -7,9 +7,11 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
+import { AlertWithIcon } from "@/components/ui/alert"
 import { Globe, Plus, FileText, Clock, CheckCircle, AlertCircle, User, LogOut } from "lucide-react"
 import { useAuth } from "@/hooks/useAuth"
 import { apiClient, type Application, type DashboardStats } from "@/lib/api"
+import { ThemeToggle } from "@/components/ui/theme-toggle"
 
 export default function CustomerDashboard() {
   const router = useRouter()
@@ -127,10 +129,17 @@ export default function CustomerDashboard() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-red-600 mb-4">{error}</p>
-          <Button onClick={fetchData}>Retry</Button>
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="max-w-md w-full">
+          <AlertWithIcon 
+            variant="destructive" 
+            title="Dashboard Error"
+            description={error}
+            className="mb-4"
+          />
+          <Button onClick={fetchData} className="w-full">
+            Retry Loading
+          </Button>
         </div>
       </div>
     )
@@ -147,9 +156,10 @@ export default function CustomerDashboard() {
               <h1 className="text-2xl font-bold text-gray-900">VisaFlow</h1>
             </div>
             <div className="flex items-center space-x-4">
-              <span className="text-sm text-gray-600">
+              <span className="text-sm text-gray-600 dark:text-gray-300">
                 Welcome, {user?.firstName} {user?.lastName}
               </span>
+              <ThemeToggle />
               <Link href="/profile">
                 <Button variant="ghost" size="sm">
                   <User className="h-4 w-4 mr-2" />

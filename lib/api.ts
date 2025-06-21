@@ -134,6 +134,24 @@ class ApiClient {
     })
   }
 
+  async assignApplication(applicationId: string, employeeId: string) {
+    return this.request(`/applications/${applicationId}/assign`, {
+      method: "POST",
+      body: JSON.stringify({ employeeId }),
+    })
+  }
+
+  async bulkApplicationAction(applicationIds: string[], action: string, comments?: string) {
+    return this.request("/applications/bulk-action", {
+      method: "POST",
+      body: JSON.stringify({ applicationIds, action, comments }),
+    })
+  }
+
+  async getEmployeePerformance() {
+    return this.request("/employee/performance")
+  }
+
   // Document upload
   async uploadDocuments(applicationId: string, files: File[], documentTypes: string[]) {
     const formData = new FormData()
@@ -344,6 +362,35 @@ export interface Employee {
   employeeId?: string
   hireDate?: string
   createdAt: string
+}
+
+export interface EmployeePerformance {
+  totalProcessed: number
+  approvedCount: number
+  rejectedCount: number
+  recentProcessed: number
+  currentAssignments: number
+  avgProcessingTime: number
+  approvalRate: number
+  role?: string
+  employeeId?: string
+  hireDate?: string
+  totalAssigned?: number
+  pendingReview?: number
+  completedToday?: number
+}
+
+export interface Profile {
+  user: {
+    id: string
+    email: string
+    firstName: string
+    lastName: string
+    phone?: string
+    userType: string
+    status: string
+  }
+  profile: any
 }
 
 export interface Customer {

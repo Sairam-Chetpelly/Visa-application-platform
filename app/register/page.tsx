@@ -5,6 +5,7 @@ import type React from "react"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/hooks/useAuth"
+import { useToast } from "@/hooks/useToast"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -12,11 +13,14 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
+import { AlertWithIcon } from "@/components/ui/alert"
 import { Globe, ArrowLeft } from "lucide-react"
+import { ThemeToggle } from "@/components/ui/theme-toggle"
 
 export default function RegisterPage() {
   const router = useRouter()
   const { register, loading, error } = useAuth()
+  const { toast } = useToast()
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
@@ -54,10 +58,23 @@ export default function RegisterPage() {
       })
 
       // Show success message and redirect to login
-      alert("Registration successful! Please login to continue.")
-      router.push("/login")
+      toast({
+        variant: "success",
+        title: "Registration Successful!",
+        description: "Your account has been created. Please login to continue."
+      })
+      
+      setTimeout(() => {
+        router.push("/login")
+      }, 2000)
     } catch (err) {
-      setSubmitError(err instanceof Error ? err.message : "Registration failed")
+      const errorMessage = err instanceof Error ? err.message : "Registration failed"
+      setSubmitError(errorMessage)
+      toast({
+        variant: "destructive",
+        title: "Registration Failed",
+        description: errorMessage
+      })
     }
   }
 
@@ -66,13 +83,16 @@ export default function RegisterPage() {
       <div className="w-full max-w-md">
         {/* Header */}
         <div className="text-center mb-8">
-          <Link href="/" className="inline-flex items-center text-blue-600 hover:text-blue-700 mb-4">
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Home
-          </Link>
+          <div className="flex justify-between items-center mb-4">
+            <Link href="/" className="inline-flex items-center text-blue-600 hover:text-blue-700">
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to Home
+            </Link>
+            <ThemeToggle />
+          </div>
           <div className="flex items-center justify-center space-x-2 mb-4">
             <Globe className="h-8 w-8 text-blue-600" />
-            <h1 className="text-2xl font-bold text-gray-900">VisaFlow</h1>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">VisaFlow</h1>
           </div>
         </div>
 
@@ -86,9 +106,12 @@ export default function RegisterPage() {
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
               {(error || submitError) && (
-                <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
-                  {error || submitError}
-                </div>
+                <AlertWithIcon 
+                  variant="destructive" 
+                  title="Registration Error"
+                  description={error || submitError}
+                  className="mb-4"
+                />
               )}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">

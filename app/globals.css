@@ -90,5 +90,74 @@ body {
   }
   body {
     @apply bg-background text-foreground;
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
+  
+  /* Ensure smooth transitions for theme changes */
+  html {
+    transition: background-color 0.3s ease;
+  }
+  
+  /* Dark mode improvements */
+  .dark {
+    color-scheme: dark;
+  }
+  
+  /* Custom scrollbar styling */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  
+  ::-webkit-scrollbar-track {
+    background: hsl(var(--muted));
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--border));
+    border-radius: 4px;
+  }
+  
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground));
+  }
+  
+  /* Dark mode specific scrollbar */
+  .dark ::-webkit-scrollbar-track {
+    background: hsl(var(--background));
+  }
+  
+  .dark ::-webkit-scrollbar-thumb {
+    background: hsl(var(--border));
+  }
+  
+  .dark ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground));
+  }
+  
+  /* Prevent flash of unstyled content */
+  html[data-theme="dark"] {
+    color-scheme: dark;
+  }
+  
+  html[data-theme="light"] {
+    color-scheme: light;
+  }
+  
+  /* Enhanced focus styles for dark mode */
+  .dark *:focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+  
+  /* Better selection colors */
+  ::selection {
+    background: hsl(var(--primary) / 0.2);
+    color: hsl(var(--primary-foreground));
+  }
+  
+  .dark ::selection {
+    background: hsl(var(--primary) / 0.3);
+    color: hsl(var(--primary-foreground));
   }
 }

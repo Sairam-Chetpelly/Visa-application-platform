@@ -5,6 +5,7 @@ import type React from "react"
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/hooks/useAuth"
+import { useToast } from "@/hooks/useToast"
 import { apiClient, type Application, type DashboardStats, type Employee, type Customer, type Payment } from "@/lib/api"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -15,12 +16,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Sidebar, MobileSidebar } from "@/components/ui/sidebar"
+import { AlertWithIcon } from "@/components/ui/alert"
 import { Globe, Users, FileText, TrendingUp, Plus, Edit, Trash2, User, LogOut, BarChart3, CreditCard, DollarSign, UserCheck } from "lucide-react"
 import Link from "next/link"
+import { ThemeToggle } from "@/components/ui/theme-toggle"
 
 export default function AdminDashboard() {
   const router = useRouter()
   const { user, logout, initialized } = useAuth()
+  const { toast } = useToast()
   const [applications, setApplications] = useState<Application[]>([])
   const [employees, setEmployees] = useState<Employee[]>([])
   const [customers, setCustomers] = useState<Customer[]>([])
@@ -84,10 +88,19 @@ export default function AdminDashboard() {
     try {
       await apiClient.createEmployee(newEmployee)
       setNewEmployee({ firstName: "", lastName: "", email: "", role: "", password: "" })
-      alert("Employee created successfully!")
+      toast({
+        variant: "success",
+        title: "Employee Created",
+        description: "Employee has been created successfully!"
+      })
       await fetchData()
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to create employee")
+      const errorMessage = err instanceof Error ? err.message : "Failed to create employee"
+      toast({
+        variant: "destructive",
+        title: "Creation Failed",
+        description: errorMessage
+      })
     }
   }
 
@@ -101,9 +114,18 @@ export default function AdminDashboard() {
       try {
         await apiClient.deleteEmployee(employeeId)
         await fetchData()
-        alert("Employee deleted successfully!")
+        toast({
+          variant: "success",
+          title: "Employee Deleted",
+          description: "Employee has been deleted successfully!"
+        })
       } catch (err) {
-        alert(err instanceof Error ? err.message : "Failed to delete employee")
+        const errorMessage = err instanceof Error ? err.message : "Failed to delete employee"
+        toast({
+          variant: "destructive",
+          title: "Deletion Failed",
+          description: errorMessage
+        })
       }
     }
   }
@@ -113,9 +135,18 @@ export default function AdminDashboard() {
       try {
         await apiClient.deleteCustomer(customerId)
         await fetchData()
-        alert("Customer deleted successfully!")
+        toast({
+          variant: "success",
+          title: "Customer Deleted",
+          description: "Customer has been deleted successfully!"
+        })
       } catch (err) {
-        alert(err instanceof Error ? err.message : "Failed to delete customer")
+        const errorMessage = err instanceof Error ? err.message : "Failed to delete customer"
+        toast({
+          variant: "destructive",
+          title: "Deletion Failed",
+          description: errorMessage
+        })
       }
     }
   }
@@ -125,9 +156,18 @@ export default function AdminDashboard() {
       try {
         await apiClient.deleteApplication(applicationId)
         await fetchData()
-        alert("Application deleted successfully!")
+        toast({
+          variant: "success",
+          title: "Application Deleted",
+          description: "Application has been deleted successfully!"
+        })
       } catch (err) {
-        alert(err instanceof Error ? err.message : "Failed to delete application")
+        const errorMessage = err instanceof Error ? err.message : "Failed to delete application"
+        toast({
+          variant: "destructive",
+          title: "Deletion Failed",
+          description: errorMessage
+        })
       }
     }
   }
@@ -211,6 +251,24 @@ export default function AdminDashboard() {
     )
   }
 
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="max-w-md w-full">
+          <AlertWithIcon 
+            variant="destructive" 
+            title="Dashboard Error"
+            description={error}
+            className="mb-4"
+          />
+          <Button onClick={fetchData} className="w-full">
+            Retry Loading
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -225,6 +283,7 @@ export default function AdminDashboard() {
               </div>
             </div>
             <div className="flex items-center space-x-4">
+              <ThemeToggle />
               <Link href="/profile">
                 <Button variant="ghost" size="sm">
                   <User className="h-4 w-4 mr-2" />
@@ -441,9 +500,17 @@ export default function AdminDashboard() {
                                         role: formData.get('role') as string
                                       })
                                       await fetchData()
-                                      alert('Employee updated successfully!')
+                                      toast({
+                                        variant: "success",
+                                        title: "Employee Updated",
+                                        description: "Employee information has been updated successfully!"
+                                      })
                                     } catch (err: any) {
-                                      alert(err.message)
+                                      toast({
+                                        variant: "destructive",
+                                        title: "Update Failed",
+                                        description: err.message
+                                      })
                                     }
                                   }} className="space-y-4">
                                     <div className="grid grid-cols-2 gap-4">
@@ -566,9 +633,17 @@ export default function AdminDashboard() {
                                         status: formData.get('status') as string
                                       })
                                       await fetchData()
-                                      alert('Customer updated successfully!')
+                                      toast({
+                                        variant: "success",
+                                        title: "Customer Updated",
+                                        description: "Customer information has been updated successfully!"
+                                      })
                                     } catch (err: any) {
-                                      alert(err.message)
+                                      toast({
+                                        variant: "destructive",
+                                        title: "Update Failed",
+                                        description: err.message
+                                      })
                                     }
                                   }} className="space-y-4">
                                     <div className="grid grid-cols-2 gap-4">
@@ -680,9 +755,17 @@ export default function AdminDashboard() {
                                         priority: formData.get('priority') as string
                                       })
                                       await fetchData()
-                                      alert('Application updated successfully!')
+                                      toast({
+                                        variant: "success",
+                                        title: "Application Updated",
+                                        description: "Application has been updated successfully!"
+                                      })
                                     } catch (err: any) {
-                                      alert(err.message)
+                                      toast({
+                                        variant: "destructive",
+                                        title: "Update Failed",
+                                        description: err.message
+                                      })
                                     }
                                   }} className="space-y-4">
                                     <div>

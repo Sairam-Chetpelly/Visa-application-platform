@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/hooks/useAuth"
+import { useToast } from "@/hooks/useToast"
 import { apiClient, type Application, type DashboardStats } from "@/lib/api"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -10,12 +11,15 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Globe, Search, Filter, Eye, CheckCircle, XCircle, RotateCcw, User, LogOut } from "lucide-react"
+import { AlertWithIcon } from "@/components/ui/alert"
+import { Globe, Search, Filter, Eye, CheckCircle, XCircle, RotateCcw, User, LogOut, TrendingUp } from "lucide-react"
 import Link from "next/link"
+import { ThemeToggle } from "@/components/ui/theme-toggle"
 
 export default function EmployeeDashboard() {
   const router = useRouter()
-  const { user, logout } = useAuth()
+  const { user, logout,initialized } = useAuth()
+  const { toast } = useToast()
   const [applications, setApplications] = useState<Application[]>([])
   const [stats, setStats] = useState<DashboardStats>({})
   const [loading, setLoading] = useState(true)
@@ -24,6 +28,7 @@ export default function EmployeeDashboard() {
   const [statusFilter, setStatusFilter] = useState("all")
 
   useEffect(() => {
+    if (!initialized) return
     if (!user) {
       router.push("/login")
       return
@@ -35,7 +40,7 @@ export default function EmployeeDashboard() {
     }
 
     fetchData()
-  }, [user, router])
+  }, [user, router,initialized])
 
   const fetchData = async () => {
     try {
@@ -52,6 +57,8 @@ export default function EmployeeDashboard() {
           app.status === "approved" && 
           new Date(app.updated_at).toDateString() === new Date().toDateString()
         ).length || 0,
+        high_priority: applicationsData?.filter(app => app.priority === "high").length || 0,
+        assigned_applications: applicationsData?.filter(app => app.assignedTo?._id === user?.userId).length || 0,
         ...statsData
       })
     } catch (err) {
@@ -66,9 +73,37 @@ export default function EmployeeDashboard() {
       await apiClient.updateApplicationStatus(applicationId.toString(), status, comments)
       // Refresh data after update
       await fetchData()
-      alert("Application status updated successfully!")
+      toast({
+        variant: "success",
+        title: "Status Updated",
+        description: "Application status has been updated successfully!"
+      })
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to update status")
+      const errorMessage = err instanceof Error ? err.message : "Failed to update status"
+      toast({
+        variant: "destructive",
+        title: "Update Failed",
+        description: errorMessage
+      })
+    }
+  }
+
+  const handleAssignToMe = async (applicationId: string) => {
+    try {
+      await apiClient.assignApplication(applicationId, user!.userId)
+      await fetchData()
+      toast({
+        variant: "success",
+        title: "Application Assigned",
+        description: "Application has been assigned to you successfully!"
+      })
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Failed to assign application"
+      toast({
+        variant: "destructive",
+        title: "Assignment Failed",
+        description: errorMessage
+      })
     }
   }
 
@@ -124,6 +159,24 @@ export default function EmployeeDashboard() {
     )
   }
 
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="max-w-md w-full">
+          <AlertWithIcon 
+            variant="destructive" 
+            title="Dashboard Error"
+            description={error}
+            className="mb-4"
+          />
+          <Button onClick={fetchData} className="w-full">
+            Retry Loading
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -135,6 +188,13 @@ export default function EmployeeDashboard() {
               <h1 className="text-2xl font-bold text-gray-900">VisaFlow - Employee Portal</h1>
             </div>
             <div className="flex items-center space-x-4">
+              <ThemeToggle />
+              <Link href="/employee-performance">
+                <Button variant="ghost" size="sm">
+                  <TrendingUp className="h-4 w-4 mr-2" />
+                  Performance
+                </Button>
+              </Link>
               <Link href="/profile">
                 <Button variant="ghost" size="sm">
                   <User className="h-4 w-4 mr-2" />
@@ -153,8 +213,18 @@ export default function EmployeeDashboard() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Welcome Section */}
         <div className="mb-8">
-          <h2 className="text-3xl font-bold text-gray-900 mb-2">Welcome back, Employee!</h2>
+          <h2 className="text-3xl font-bold text-gray-900 mb-2">Welcome back, {user?.firstName}!</h2>
           <p className="text-gray-600">Review and process visa applications efficiently.</p>
+          {stats.role && (
+            <div className="mt-2">
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                {stats.role}
+              </span>
+              {stats.employeeId && (
+                <span className="ml-2 text-sm text-gray-500">ID: {stats.employeeId}</span>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Stats Cards */}
@@ -190,7 +260,7 @@ export default function EmployeeDashboard() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600">High Priority</p>
-                  <p className="text-2xl font-bold text-red-600">0</p>
+                  <p className="text-2xl font-bold text-red-600">{stats.high_priority || 0}</p>
                 </div>
                 <div className="h-8 w-8 bg-red-100 rounded-full flex items-center justify-center">
                   <XCircle className="h-4 w-4 text-red-600" />
@@ -202,8 +272,8 @@ export default function EmployeeDashboard() {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-600">Total Applications</p>
-                  <p className="text-2xl font-bold text-gray-900">{applications.length}</p>
+                  <p className="text-sm font-medium text-gray-600">My Applications</p>
+                  <p className="text-2xl font-bold text-gray-900">{stats.assigned_applications || 0}</p>
                 </div>
                 <div className="h-8 w-8 bg-gray-100 rounded-full flex items-center justify-center">
                   <RotateCcw className="h-4 w-4 text-gray-600" />
@@ -326,6 +396,21 @@ export default function EmployeeDashboard() {
                                 Request Info
                               </Button>
                             </>
+                          )}
+                          {!app.assignedTo && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-blue-600"
+                              onClick={() => handleAssignToMe(app.id.toString())}
+                            >
+                              Assign to Me
+                            </Button>
+                          )}
+                          {app.assignedTo && app.assignedTo._id !== user?.userId && (
+                            <span className="text-xs text-gray-500">
+                              Assigned to {app.assignedTo.firstName} {app.assignedTo.lastName}
+                            </span>
                           )}
                         </div>
                       </TableCell>
