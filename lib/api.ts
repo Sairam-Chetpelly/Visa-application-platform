@@ -1,5 +1,10 @@
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api"
 
+// Log the API base URL for debugging
+if (typeof window !== "undefined") {
+  console.log("API Base URL:", API_BASE_URL)
+}
+
 // API utility functions
 class ApiClient {
   private baseURL: string
@@ -38,17 +43,44 @@ class ApiClient {
       headers.Authorization = `Bearer ${this.token}`
     }
 
-    const response = await fetch(url, {
-      ...options,
-      headers,
-    })
+    try {
+      console.log(`API Request: ${options.method || 'GET'} ${url}`)
+      
+      const response = await fetch(url, {
+        ...options,
+        headers,
+      })
 
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: "Network error" }))
-      throw new Error(error.error || `HTTP ${response.status}`)
+      if (!response.ok) {
+        let errorMessage = `HTTP ${response.status}`
+        try {
+          const errorData = await response.json()
+          errorMessage = errorData.error || errorData.message || errorMessage
+        } catch {
+          // If we can't parse the error response, use the status
+          if (response.status === 404) {
+            errorMessage = `Endpoint not found: ${endpoint}`
+          } else if (response.status === 403) {
+            errorMessage = "Access denied"
+          } else if (response.status === 401) {
+            errorMessage = "Authentication required"
+          }
+        }
+        
+        console.error(`API Error: ${options.method || 'GET'} ${url} - ${errorMessage}`)
+        throw new Error(errorMessage)
+      }
+
+      const data = await response.json()
+      console.log(`API Success: ${options.method || 'GET'} ${url}`, data)
+      return data
+    } catch (error) {
+      if (error instanceof TypeError && error.message.includes('fetch')) {
+        console.error(`Network Error: ${url}`, error)
+        throw new Error(`Network error: Unable to connect to server. Please check if the backend is running.`)
+      }
+      throw error
     }
-
-    return response.json()
   }
 
   // Auth endpoints
@@ -195,57 +227,74 @@ class ApiClient {
   }
 
   async getEmployees() {
-    return this.request("/admin/employees")
+    return this.request("/employees")
   }
 
   async updateEmployee(employeeId: string, employeeData: any) {
-    return this.request(`/admin/employees/${employeeId}`, {
+    return this.request(`/employees/${employeeId}`, {
       method: "PUT",
       body: JSON.stringify(employeeData),
     })
   }
 
   async deleteEmployee(employeeId: string) {
-    return this.request(`/admin/employees/${employeeId}`, {
+    return this.request(`/employees/${employeeId}`, {
       method: "DELETE",
     })
   }
 
   // Customer management (Admin only)
   async getCustomers() {
-    return this.request("/admin/customers")
+    return this.request("/customers")
   }
 
   async updateCustomer(customerId: string, customerData: any) {
-    return this.request(`/admin/customers/${customerId}`, {
+    return this.request(`/customers/${customerId}`, {
       method: "PUT",
       body: JSON.stringify(customerData),
     })
   }
 
   async deleteCustomer(customerId: string) {
-    return this.request(`/admin/customers/${customerId}`, {
+    return this.request(`/customers/${customerId}`, {
       method: "DELETE",
     })
   }
 
   // Application management (Admin only)
   async updateApplication(applicationId: string, applicationData: any) {
-    return this.request(`/admin/applications/${applicationId}`, {
+    return this.request(`/applications/${applicationId}`, {
       method: "PUT",
       body: JSON.stringify(applicationData),
     })
   }
 
   async deleteApplication(applicationId: string) {
-    return this.request(`/admin/applications/${applicationId}`, {
+    return this.request(`/applications/${applicationId}`, {
       method: "DELETE",
     })
   }
 
-  // Payment management (Admin only)
+  // Payment management
   async getPayments() {
-    return this.request("/admin/payments")
+    return this.request("/payments")
+  }
+
+  async getCustomerPayments() {
+    return this.request("/customer/payments")
+  }
+
+  async getPayment(paymentId: string) {
+    return this.request(`/payments/${paymentId}`)
+  }
+
+  async getPaymentReceipt(paymentId: string) {
+    return this.request(`/payments/${paymentId}/receipt`)
+  }
+
+  // Admin payment management
+  async getAdminPayments() {
+    return this.request("/payments")
   }
 
   // Profile management
@@ -263,6 +312,74 @@ class ApiClient {
   // Dashboard stats
   async getDashboardStats() {
     return this.request("/dashboard/stats")
+  }
+
+  // Admin Country Management
+  async getAdminCountries() {
+    return this.request("/admin/countries")
+  }
+
+  async createCountry(countryData: any) {
+    return this.request("/admin/countries", {
+      method: "POST",
+      body: JSON.stringify(countryData),
+    })
+  }
+
+  async updateCountry(countryId: string, countryData: any) {
+    return this.request(`/admin/countries/${countryId}`, {
+      method: "PUT",
+      body: JSON.stringify(countryData),
+    })
+  }
+
+  async deleteCountry(countryId: string) {
+    return this.request(`/admin/countries/${countryId}`, {
+      method: "DELETE",
+    })
+  }
+
+  // Admin Visa Type Management
+  async getAdminVisaTypes() {
+    return this.request("/admin/visa-types")
+  }
+
+  async createVisaType(visaTypeData: any) {
+    return this.request("/admin/visa-types", {
+      method: "POST",
+      body: JSON.stringify(visaTypeData),
+    })
+  }
+
+  async updateVisaType(visaTypeId: string, visaTypeData: any) {
+    return this.request(`/admin/visa-types/${visaTypeId}`, {
+      method: "PUT",
+      body: JSON.stringify(visaTypeData),
+    })
+  }
+
+  async deleteVisaType(visaTypeId: string) {
+    return this.request(`/admin/visa-types/${visaTypeId}`, {
+      method: "DELETE",
+    })
+  }
+
+  // Admin System Settings
+  async getSystemSettings() {
+    return this.request("/admin/settings")
+  }
+
+  async updateSystemSetting(settingData: { key: string; value: string; description?: string }) {
+    return this.request("/admin/settings", {
+      method: "POST",
+      body: JSON.stringify(settingData),
+    })
+  }
+
+  async deleteSystemSetting(key: string) {
+    return this.request(`/admin/settings/${key}`, {
+      method: "DELETE",
+    })
   }
 }
 
@@ -429,4 +546,37 @@ export interface Payment {
   razorpayPaymentId?: string
   createdAt: string
   verifiedAt?: string
+}
+
+export interface AdminCountry {
+  _id: string
+  name: string
+  code: string
+  flagEmoji: string
+  processingTimeMin: number
+  processingTimeMax: number
+  isActive: boolean
+  createdAt: string
+}
+
+export interface AdminVisaType {
+  _id: string
+  countryId: string | { _id: string; name: string }
+  name: string
+  description: string
+  fee: number
+  processingTimeDays: number
+  requiredDocuments: string[]
+  isActive: boolean
+  createdAt: string
+}
+
+export interface SystemSetting {
+  _id: string
+  key: string
+  value: string
+  description?: string
+  updatedBy: string
+  createdAt: string
+  updatedAt: string
 }

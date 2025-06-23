@@ -1,7 +1,7 @@
 {
   "name": "visa-management-system",
   "version": "1.0.0",
-  "description": "Comprehensive visa application management system",
+  "description": "Comprehensive visa application management system with admin dashboard",
   "type": "module",
   "main": "scripts/backend-server.js",
   "scripts": {
@@ -9,14 +9,24 @@
     "dev": "next dev",
     "lint": "next lint",
     "server": "node scripts/backend-server.js",
+    "dev:server": "nodemon scripts/backend-server.js",
     "server:dev": "nodemon scripts/backend-server.js",
+    "setup:mongodb": "node scripts/setup-mongodb.js",
     "setup-db": "node scripts/setup-mongodb.js",
     "setup-db-mysql": "node scripts/setup-database.js",
+    "verify:mongodb": "node scripts/verify-mongodb.js",
     "verify-db": "node scripts/verify-mongodb.js",
+    "test:api": "node test-api.js",
     "test-api": "node test-api.js",
+    "test:admin": "node test-admin-api.js",
+    "test:performance": "node scripts/test-performance.js",
     "test-performance": "node scripts/test-performance.js",
+    "debug:admin": "./start-admin-debug.sh",
     "start-app": "./start-app.sh",
-    "start": "next start"
+    "start": "next start",
+    "debug:payment": "node debug-payment.js",
+    "test:backend": "node test-backend.js",
+    "dev:full": "./start-dev.sh"
   },
   "dependencies": {
     "@radix-ui/react-accordion": "^1.1.2",

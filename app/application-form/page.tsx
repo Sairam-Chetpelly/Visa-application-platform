@@ -281,21 +281,28 @@ export default function ApplicationFormPage() {
     setError(null)
     setSuccess(null)
 
+    console.log("🚀 Starting form submission...")
+
     // First save as draft
     const applicationId = await handleSaveDraft()
     
     if (!applicationId) {
+      console.log("❌ Failed to save draft")
       return // Error already set in handleSaveDraft
     }
 
+    console.log("✅ Draft saved, application ID:", applicationId)
     setCurrentApplicationId(applicationId.toString())
 
     try {
+      console.log("💳 Creating payment order...")
       // Create payment order
       const paymentOrder = await apiClient.createPaymentOrder(applicationId.toString())
+      console.log("💳 Payment order response:", paymentOrder)
       
       // Check if payment is required
       if (paymentOrder.paymentRequired === false) {
+        console.log("✅ No payment required, submitting directly")
         toast({
           variant: "success",
           title: "Application Submitted!",
@@ -308,10 +315,14 @@ export default function ApplicationFormPage() {
           router.push("/customer-dashboard")
         }, 3000)
       } else {
+        console.log("💳 Payment required, opening payment modal")
+        console.log("💳 Payment data:", paymentOrder)
         setPaymentData(paymentOrder)
         setShowPaymentModal(true)
+        console.log("💳 Payment modal should be open now")
       }
     } catch (err) {
+      console.error("❌ Payment order creation failed:", err)
       const errorMessage = err instanceof Error ? err.message : "Failed to create payment order"
       setError(errorMessage)
       toast({
@@ -752,6 +763,19 @@ export default function ApplicationFormPage() {
           onPaymentSuccess={handlePaymentSuccess}
           onPaymentError={handlePaymentError}
         />
+        
+        {/* Debug Information */}
+        {process.env.NODE_ENV === 'development' && (
+          <div className="mt-8 p-4 bg-gray-100 rounded-lg text-sm">
+            <h4 className="font-semibold mb-2">Debug Information:</h4>
+            <p>Show Payment Modal: {showPaymentModal ? 'Yes' : 'No'}</p>
+            <p>Payment Data: {paymentData ? 'Available' : 'Not Available'}</p>
+            <p>Current Application ID: {currentApplicationId || 'None'}</p>
+            <p>Submitting: {submitting ? 'Yes' : 'No'}</p>
+            {error && <p className="text-red-600">Error: {error}</p>}
+            {success && <p className="text-green-600">Success: {success}</p>}
+          </div>
+        )}
       </div>
     </div>
   )

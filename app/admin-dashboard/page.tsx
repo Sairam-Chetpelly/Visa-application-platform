@@ -6,7 +6,7 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/hooks/useAuth"
 import { useToast } from "@/hooks/useToast"
-import { apiClient, type Application, type DashboardStats, type Employee, type Customer, type Payment } from "@/lib/api"
+import { apiClient, type Application, type DashboardStats, type Employee, type Customer, type Payment, type AdminCountry, type AdminVisaType, type SystemSetting } from "@/lib/api"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -17,9 +17,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Sidebar, MobileSidebar } from "@/components/ui/sidebar"
 import { AlertWithIcon } from "@/components/ui/alert"
-import { Globe, Users, FileText, TrendingUp, Plus, Edit, Trash2, User, LogOut, BarChart3, CreditCard, DollarSign, UserCheck } from "lucide-react"
+import { Globe, Users, FileText, TrendingUp, Plus, Edit, Trash2, User, LogOut, BarChart3, CreditCard, DollarSign, UserCheck, Eye, Settings, MapPin } from "lucide-react"
 import Link from "next/link"
 import { ThemeToggle } from "@/components/ui/theme-toggle"
+import { ErrorBoundary } from "@/components/ErrorBoundary"
 
 export default function AdminDashboard() {
   const router = useRouter()
@@ -29,6 +30,9 @@ export default function AdminDashboard() {
   const [employees, setEmployees] = useState<Employee[]>([])
   const [customers, setCustomers] = useState<Customer[]>([])
   const [payments, setPayments] = useState<Payment[]>([])
+  const [countries, setCountries] = useState<AdminCountry[]>([])
+  const [visaTypes, setVisaTypes] = useState<AdminVisaType[]>([])
+  const [settings, setSettings] = useState<SystemSetting[]>([])
   const [stats, setStats] = useState<DashboardStats>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -42,40 +46,137 @@ export default function AdminDashboard() {
     role: "",
     password: "",
   })
+  const [newCountry, setNewCountry] = useState({
+    name: "",
+    code: "",
+    flagEmoji: "",
+    processingTimeMin: 15,
+    processingTimeMax: 30
+  })
 
   useEffect(() => {
-    if (!initialized) return
+    if (!initialized) {
+      console.log("Auth not initialized yet...")
+      return
+    }
 
     if (!user) {
+      console.log("No user found, redirecting to login")
       router.push("/login")
       return
     }
 
     if (user.userType !== "admin") {
+      console.log("User is not admin:", user.userType, "redirecting to login")
       router.push("/login")
       return
     }
 
+    console.log("Admin user authenticated, fetching data...")
     fetchData()
   }, [user, router, initialized])
 
   const fetchData = async () => {
     try {
       setLoading(true)
-      const [applicationsData, statsData, employeesData, customersData, paymentsData] = await Promise.all([
+      setError(null)
+      
+      console.log("Fetching admin dashboard data...")
+      
+      // Fetch data with individual error handling
+      const results = await Promise.allSettled([
         apiClient.getApplications(),
         apiClient.getDashboardStats(),
         apiClient.getEmployees(),
         apiClient.getCustomers(),
         apiClient.getPayments(),
+        apiClient.getAdminCountries(),
+        apiClient.getAdminVisaTypes(),
+        apiClient.getSystemSettings(),
       ])
-      setApplications(applicationsData || [])
-      setEmployees(employeesData || [])
-      setCustomers(customersData || [])
-      setPayments(paymentsData || [])
-      setStats(statsData || {})
-      console.log("========",applicationsData);
+      
+      // Handle applications
+      if (results[0].status === 'fulfilled') {
+        setApplications(results[0].value || [])
+        console.log("Applications loaded:", results[0].value?.length || 0)
+      } else {
+        console.error("Failed to load applications:", results[0].reason)
+        setApplications([])
+      }
+      
+      // Handle stats
+      if (results[1].status === 'fulfilled') {
+        setStats(results[1].value || {})
+        console.log("Stats loaded:", results[1].value)
+      } else {
+        console.error("Failed to load stats:", results[1].reason)
+        setStats({})
+      }
+      
+      // Handle employees
+      if (results[2].status === 'fulfilled') {
+        setEmployees(results[2].value || [])
+        console.log("Employees loaded:", results[2].value?.length || 0)
+      } else {
+        console.error("Failed to load employees:", results[2].reason)
+        setEmployees([])
+      }
+      
+      // Handle customers
+      if (results[3].status === 'fulfilled') {
+        setCustomers(results[3].value || [])
+        console.log("Customers loaded:", results[3].value?.length || 0)
+      } else {
+        console.error("Failed to load customers:", results[3].reason)
+        setCustomers([])
+      }
+      
+      // Handle payments
+      if (results[4].status === 'fulfilled') {
+        setPayments(results[4].value || [])
+        console.log("Payments loaded:", results[4].value?.length || 0)
+      } else {
+        console.error("Failed to load payments:", results[4].reason)
+        setPayments([])
+      }
+      
+      // Handle countries
+      if (results[5].status === 'fulfilled') {
+        setCountries(results[5].value || [])
+        console.log("Countries loaded:", results[5].value?.length || 0)
+      } else {
+        console.error("Failed to load countries:", results[5].reason)
+        setCountries([])
+      }
+      
+      // Handle visa types
+      if (results[6].status === 'fulfilled') {
+        setVisaTypes(results[6].value || [])
+        console.log("Visa types loaded:", results[6].value?.length || 0)
+      } else {
+        console.error("Failed to load visa types:", results[6].reason)
+        setVisaTypes([])
+      }
+      
+      // Handle settings
+      if (results[7].status === 'fulfilled') {
+        setSettings(results[7].value || [])
+        console.log("Settings loaded:", results[7].value?.length || 0)
+      } else {
+        console.error("Failed to load settings:", results[7].reason)
+        setSettings([])
+      }
+      
+      // Check if any critical errors occurred
+      const failedRequests = results.filter(result => result.status === 'rejected')
+      if (failedRequests.length === results.length) {
+        setError("Failed to load dashboard data. Please check your connection and try again.")
+      } else if (failedRequests.length > 0) {
+        console.warn(`${failedRequests.length} out of ${results.length} requests failed`)
+      }
+      
     } catch (err) {
+      console.error("Dashboard fetch error:", err)
       setError(err instanceof Error ? err.message : "Failed to fetch data")
     } finally {
       setLoading(false)
@@ -208,6 +309,24 @@ export default function AdminDashboard() {
       icon: TrendingUp,
       onClick: () => setActiveTab("reports"),
       active: activeTab === "reports"
+    },
+    {
+      title: "Countries",
+      icon: MapPin,
+      onClick: () => setActiveTab("countries"),
+      active: activeTab === "countries"
+    },
+    {
+      title: "Visa Types",
+      icon: FileText,
+      onClick: () => setActiveTab("visa-types"),
+      active: activeTab === "visa-types"
+    },
+    {
+      title: "Settings",
+      icon: Settings,
+      onClick: () => setActiveTab("settings"),
+      active: activeTab === "settings"
     }
   ]
 
@@ -270,6 +389,7 @@ export default function AdminDashboard() {
   }
 
   return (
+    <ErrorBoundary>
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white shadow-sm border-b">
@@ -835,6 +955,7 @@ export default function AdminDashboard() {
                         <TableHead>Amount</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead>Date</TableHead>
+                        <TableHead>Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -851,6 +972,13 @@ export default function AdminDashboard() {
                             <Badge className={getStatusColor(payment.status)}>{payment.status}</Badge>
                           </TableCell>
                           <TableCell>{new Date(payment.createdAt).toLocaleDateString()}</TableCell>
+                          <TableCell>
+                            <div className="flex space-x-2">
+                              <Button size="sm" variant="outline">
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -863,55 +991,42 @@ export default function AdminDashboard() {
           {activeTab === "reports" && (
             <div className="space-y-6">
               <h2 className="text-3xl font-bold text-gray-900">Reports & Analytics</h2>
-              <div className="grid lg:grid-cols-2 gap-6">
+              <div className="grid md:grid-cols-2 gap-6">
                 <Card>
                   <CardHeader>
-                    <CardTitle>Revenue Analytics</CardTitle>
-                    <CardDescription>Financial performance overview</CardDescription>
+                    <CardTitle>Application Status Distribution</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="space-y-4">
-                      <div className="p-4 bg-green-50 rounded-lg">
-                        <h4 className="font-medium text-green-900">Total Revenue</h4>
-                        <p className="text-2xl font-bold text-green-600">${stats.totalRevenue || 0}</p>
+                    <div className="space-y-2">
+                      <div className="flex justify-between">
+                        <span>Approved</span>
+                        <span className="font-semibold text-green-600">{stats.approvedApplications || 0}</span>
                       </div>
-                      <div className="p-4 bg-blue-50 rounded-lg">
-                        <h4 className="font-medium text-blue-900">Total Payments</h4>
-                        <p className="text-2xl font-bold text-blue-600">{stats.totalPayments || 0}</p>
+                      <div className="flex justify-between">
+                        <span>Under Review</span>
+                        <span className="font-semibold text-yellow-600">{stats.pendingApplications || 0}</span>
                       </div>
-                      <div className="p-4 bg-purple-50 rounded-lg">
-                        <h4 className="font-medium text-purple-900">Approval Rate</h4>
-                        <p className="text-2xl font-bold text-purple-600">
-                          {stats.totalApplications && stats.approvedApplications ? 
-                            Math.round((stats.approvedApplications / stats.totalApplications) * 100) : 0}%
-                        </p>
+                      <div className="flex justify-between">
+                        <span>Draft</span>
+                        <span className="font-semibold text-gray-600">{stats.draftApplications || 0}</span>
                       </div>
                     </div>
                   </CardContent>
                 </Card>
-
+                
                 <Card>
                   <CardHeader>
-                    <CardTitle>Application Statistics</CardTitle>
-                    <CardDescription>Application status breakdown</CardDescription>
+                    <CardTitle>Revenue Summary</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="space-y-4">
-                      <div className="flex justify-between items-center">
-                        <span>Total Applications</span>
-                        <span className="font-bold">{stats.totalApplications || 0}</span>
+                    <div className="space-y-2">
+                      <div className="flex justify-between">
+                        <span>Total Revenue</span>
+                        <span className="font-semibold text-green-600">${stats.totalRevenue || 0}</span>
                       </div>
-                      <div className="flex justify-between items-center">
-                        <span>Approved</span>
-                        <span className="font-bold text-green-600">{stats.approvedApplications || 0}</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span>Pending Review</span>
-                        <span className="font-bold text-yellow-600">{stats.pendingApplications || 0}</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span>Draft</span>
-                        <span className="font-bold text-gray-600">{stats.draftApplications || 0}</span>
+                      <div className="flex justify-between">
+                        <span>Total Payments</span>
+                        <span className="font-semibold">{stats.totalPayments || 0}</span>
                       </div>
                     </div>
                   </CardContent>
@@ -919,8 +1034,539 @@ export default function AdminDashboard() {
               </div>
             </div>
           )}
+
+          {activeTab === "countries" && (
+            <div className="space-y-6">
+              <div className="flex justify-between items-center">
+                <h2 className="text-3xl font-bold text-gray-900">Country Management</h2>
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <Button>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Country
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Add New Country</DialogTitle>
+                    </DialogHeader>
+                    <form onSubmit={async (e) => {
+                      e.preventDefault()
+                      const formData = new FormData(e.target as HTMLFormElement)
+                      try {
+                        await apiClient.createCountry({
+                          name: formData.get('name'),
+                          code: formData.get('code'),
+                          flagEmoji: formData.get('flagEmoji'),
+                          processingTimeMin: Number(formData.get('processingTimeMin')),
+                          processingTimeMax: Number(formData.get('processingTimeMax')),
+                          isActive: true
+                        })
+                        await fetchData()
+                        toast({ variant: "success", title: "Country Created", description: "Country added successfully!" })
+                      } catch (err: any) {
+                        toast({ variant: "destructive", title: "Creation Failed", description: err.message })
+                      }
+                    }} className="space-y-4">
+                      <div>
+                        <Label>Country Name</Label>
+                        <Input name="name" required />
+                      </div>
+                      <div>
+                        <Label>Country Code</Label>
+                        <Input name="code" required />
+                      </div>
+                      <div>
+                        <Label>Flag Emoji</Label>
+                        <Input name="flagEmoji" required />
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label>Min Processing Days</Label>
+                          <Input name="processingTimeMin" type="number" required />
+                        </div>
+                        <div>
+                          <Label>Max Processing Days</Label>
+                          <Input name="processingTimeMax" type="number" required />
+                        </div>
+                      </div>
+                      <DialogFooter>
+                        <Button type="submit">Add Country</Button>
+                      </DialogFooter>
+                    </form>
+                  </DialogContent>
+                </Dialog>
+              </div>
+              <Card>
+                <CardContent>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Code</TableHead>
+                        <TableHead>Flag</TableHead>
+                        <TableHead>Processing Time</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {countries.map((country) => (
+                        <TableRow key={country._id}>
+                          <TableCell>{country.name}</TableCell>
+                          <TableCell>{country.code}</TableCell>
+                          <TableCell>{country.flagEmoji}</TableCell>
+                          <TableCell>{country.processingTimeMin}-{country.processingTimeMax} days</TableCell>
+                          <TableCell>
+                            <Badge className={getStatusColor(country.isActive ? 'active' : 'inactive')}>
+                              {country.isActive ? 'Active' : 'Inactive'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex space-x-2">
+                              <Dialog>
+                                <DialogTrigger asChild>
+                                  <Button size="sm" variant="outline">
+                                    <Edit className="h-4 w-4" />
+                                  </Button>
+                                </DialogTrigger>
+                                <DialogContent>
+                                  <DialogHeader>
+                                    <DialogTitle>Edit Country</DialogTitle>
+                                  </DialogHeader>
+                                  <form onSubmit={async (e) => {
+                                    e.preventDefault()
+                                    const formData = new FormData(e.target as HTMLFormElement)
+                                    try {
+                                      await apiClient.updateCountry(country._id, {
+                                        name: formData.get('name'),
+                                        code: formData.get('code'),
+                                        flagEmoji: formData.get('flagEmoji'),
+                                        processingTimeMin: Number(formData.get('processingTimeMin')),
+                                        processingTimeMax: Number(formData.get('processingTimeMax')),
+                                        isActive: formData.get('isActive') === 'true'
+                                      })
+                                      await fetchData()
+                                      toast({ variant: "success", title: "Country Updated" })
+                                    } catch (err: any) {
+                                      toast({ variant: "destructive", title: "Update Failed", description: err.message })
+                                    }
+                                  }} className="space-y-4">
+                                    <div>
+                                      <Label>Country Name</Label>
+                                      <Input name="name" defaultValue={country.name} required />
+                                    </div>
+                                    <div>
+                                      <Label>Country Code</Label>
+                                      <Input name="code" defaultValue={country.code} required />
+                                    </div>
+                                    <div>
+                                      <Label>Flag Emoji</Label>
+                                      <Input name="flagEmoji" defaultValue={country.flagEmoji} required />
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                      <div>
+                                        <Label>Min Processing Days</Label>
+                                        <Input name="processingTimeMin" type="number" defaultValue={country.processingTimeMin} required />
+                                      </div>
+                                      <div>
+                                        <Label>Max Processing Days</Label>
+                                        <Input name="processingTimeMax" type="number" defaultValue={country.processingTimeMax} required />
+                                      </div>
+                                    </div>
+                                    <div>
+                                      <Label>Status</Label>
+                                      <select name="isActive" defaultValue={country.isActive.toString()} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+                                        <option value="true">Active</option>
+                                        <option value="false">Inactive</option>
+                                      </select>
+                                    </div>
+                                    <DialogFooter>
+                                      <Button type="submit">Update Country</Button>
+                                    </DialogFooter>
+                                  </form>
+                                </DialogContent>
+                              </Dialog>
+                              <Button size="sm" variant="outline" className="text-red-600" onClick={async () => {
+                                if (confirm('Delete this country?')) {
+                                  try {
+                                    await apiClient.deleteCountry(country._id)
+                                    await fetchData()
+                                    toast({ variant: "success", title: "Country Deleted" })
+                                  } catch (err: any) {
+                                    toast({ variant: "destructive", title: "Delete Failed", description: err.message })
+                                  }
+                                }
+                              }}>
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {activeTab === "visa-types" && (
+            <div className="space-y-6">
+              <div className="flex justify-between items-center">
+                <h2 className="text-3xl font-bold text-gray-900">Visa Type Management</h2>
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <Button>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Visa Type
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Add New Visa Type</DialogTitle>
+                    </DialogHeader>
+                    <form onSubmit={async (e) => {
+                      e.preventDefault()
+                      const formData = new FormData(e.target as HTMLFormElement)
+                      try {
+                        await apiClient.createVisaType({
+                          countryId: formData.get('countryId'),
+                          name: formData.get('name'),
+                          description: formData.get('description'),
+                          fee: Number(formData.get('fee')),
+                          processingTimeDays: Number(formData.get('processingTimeDays')),
+                          requiredDocuments: (formData.get('requiredDocuments') as string).split(',').map(d => d.trim()),
+                          isActive: true
+                        })
+                        await fetchData()
+                        toast({ variant: "success", title: "Visa Type Created" })
+                      } catch (err: any) {
+                        toast({ variant: "destructive", title: "Creation Failed", description: err.message })
+                      }
+                    }} className="space-y-4">
+                      <div>
+                        <Label>Country</Label>
+                        <select name="countryId" className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" required>
+                          <option value="">Select country</option>
+                          {countries.map((country) => (
+                            <option key={country._id} value={country._id}>{country.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <Label>Visa Type Name</Label>
+                        <Input name="name" required />
+                      </div>
+                      <div>
+                        <Label>Description</Label>
+                        <Input name="description" required />
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label>Fee ($)</Label>
+                          <Input name="fee" type="number" required />
+                        </div>
+                        <div>
+                          <Label>Processing Days</Label>
+                          <Input name="processingTimeDays" type="number" required />
+                        </div>
+                      </div>
+                      <div>
+                        <Label>Document Requirements</Label>
+                        <div className="space-y-2">
+                          {[
+                            { key: 'passport', label: 'Passport Copy' },
+                            { key: 'photo', label: 'Passport Photo' },
+                            { key: 'financialDocs', label: 'Financial Documents' },
+                            { key: 'employmentLetter', label: 'Employment Letter' },
+                            { key: 'travelItinerary', label: 'Travel Itinerary' },
+                            { key: 'accommodationProof', label: 'Accommodation Proof' },
+                            { key: 'insurancePolicy', label: 'Travel Insurance' },
+                            { key: 'invitationLetter', label: 'Invitation Letter' }
+                          ].map((doc) => (
+                            <div key={doc.key} className="flex items-center space-x-2">
+                              <input type="checkbox" name={`doc_${doc.key}`} className="rounded" />
+                              <label className="text-sm">{doc.label}</label>
+                              <select name={`req_${doc.key}`} className="text-xs border rounded px-1">
+                                <option value="required">Required</option>
+                                <option value="optional">Optional</option>
+                              </select>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      <DialogFooter>
+                        <Button type="submit">Add Visa Type</Button>
+                      </DialogFooter>
+                    </form>
+                  </DialogContent>
+                </Dialog>
+              </div>
+              <Card>
+                <CardContent>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Country</TableHead>
+                        <TableHead>Fee</TableHead>
+                        <TableHead>Processing Days</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {visaTypes.map((visaType) => (
+                        <TableRow key={visaType._id}>
+                          <TableCell>{visaType.name}</TableCell>
+                          <TableCell>
+                            {typeof visaType.countryId === 'object' ? visaType.countryId.name : 'N/A'}
+                          </TableCell>
+                          <TableCell>${visaType.fee}</TableCell>
+                          <TableCell>{visaType.processingTimeDays} days</TableCell>
+                          <TableCell>
+                            <Badge className={getStatusColor(visaType.isActive ? 'active' : 'inactive')}>
+                              {visaType.isActive ? 'Active' : 'Inactive'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex space-x-2">
+                              <Dialog>
+                                <DialogTrigger asChild>
+                                  <Button size="sm" variant="outline">
+                                    <Edit className="h-4 w-4" />
+                                  </Button>
+                                </DialogTrigger>
+                                <DialogContent>
+                                  <DialogHeader>
+                                    <DialogTitle>Edit Visa Type</DialogTitle>
+                                  </DialogHeader>
+                                  <form onSubmit={async (e) => {
+                                    e.preventDefault()
+                                    const formData = new FormData(e.target as HTMLFormElement)
+                                    try {
+                                      await apiClient.updateVisaType(visaType._id, {
+                                        countryId: formData.get('countryId'),
+                                        name: formData.get('name'),
+                                        description: formData.get('description'),
+                                        fee: Number(formData.get('fee')),
+                                        processingTimeDays: Number(formData.get('processingTimeDays')),
+                                        requiredDocuments: (formData.get('requiredDocuments') as string).split(',').map(d => d.trim()),
+                                        isActive: formData.get('isActive') === 'true'
+                                      })
+                                      await fetchData()
+                                      toast({ variant: "success", title: "Visa Type Updated" })
+                                    } catch (err: any) {
+                                      toast({ variant: "destructive", title: "Update Failed", description: err.message })
+                                    }
+                                  }} className="space-y-4">
+                                    <div>
+                                      <Label>Country</Label>
+                                      <select name="countryId" defaultValue={typeof visaType.countryId === 'object' ? visaType.countryId._id : visaType.countryId} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" required>
+                                        {countries.map((country) => (
+                                          <option key={country._id} value={country._id}>{country.name}</option>
+                                        ))}
+                                      </select>
+                                    </div>
+                                    <div>
+                                      <Label>Visa Type Name</Label>
+                                      <Input name="name" defaultValue={visaType.name} required />
+                                    </div>
+                                    <div>
+                                      <Label>Description</Label>
+                                      <Input name="description" defaultValue={visaType.description} required />
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                      <div>
+                                        <Label>Fee ($)</Label>
+                                        <Input name="fee" type="number" defaultValue={visaType.fee} required />
+                                      </div>
+                                      <div>
+                                        <Label>Processing Days</Label>
+                                        <Input name="processingTimeDays" type="number" defaultValue={visaType.processingTimeDays} required />
+                                      </div>
+                                    </div>
+                                    <div>
+                                      <Label>Required Documents (comma-separated)</Label>
+                                      <Input name="requiredDocuments" defaultValue={visaType.requiredDocuments.join(', ')} />
+                                    </div>
+                                    <div>
+                                      <Label>Status</Label>
+                                      <select name="isActive" defaultValue={visaType.isActive.toString()} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+                                        <option value="true">Active</option>
+                                        <option value="false">Inactive</option>
+                                      </select>
+                                    </div>
+                                    <DialogFooter>
+                                      <Button type="submit">Update Visa Type</Button>
+                                    </DialogFooter>
+                                  </form>
+                                </DialogContent>
+                              </Dialog>
+                              <Button size="sm" variant="outline" className="text-red-600" onClick={async () => {
+                                if (confirm('Delete this visa type?')) {
+                                  try {
+                                    await apiClient.deleteVisaType(visaType._id)
+                                    await fetchData()
+                                    toast({ variant: "success", title: "Visa Type Deleted" })
+                                  } catch (err: any) {
+                                    toast({ variant: "destructive", title: "Delete Failed", description: err.message })
+                                  }
+                                }
+                              }}>
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {activeTab === "settings" && (
+            <div className="space-y-6">
+              <div className="flex justify-between items-center">
+                <h2 className="text-3xl font-bold text-gray-900">System Settings</h2>
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <Button>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Setting
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Add System Setting</DialogTitle>
+                    </DialogHeader>
+                    <form onSubmit={async (e) => {
+                      e.preventDefault()
+                      const formData = new FormData(e.target as HTMLFormElement)
+                      try {
+                        await apiClient.updateSystemSetting({
+                          key: formData.get('key') as string,
+                          value: formData.get('value') as string,
+                          description: formData.get('description') as string
+                        })
+                        await fetchData()
+                        toast({ variant: "success", title: "Setting Created" })
+                      } catch (err: any) {
+                        toast({ variant: "destructive", title: "Creation Failed", description: err.message })
+                      }
+                    }} className="space-y-4">
+                      <div>
+                        <Label>Setting Key</Label>
+                        <Input name="key" required />
+                      </div>
+                      <div>
+                        <Label>Setting Value</Label>
+                        <Input name="value" required />
+                      </div>
+                      <div>
+                        <Label>Description</Label>
+                        <Input name="description" />
+                      </div>
+                      <DialogFooter>
+                        <Button type="submit">Add Setting</Button>
+                      </DialogFooter>
+                    </form>
+                  </DialogContent>
+                </Dialog>
+              </div>
+              <Card>
+                <CardContent>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Key</TableHead>
+                        <TableHead>Value</TableHead>
+                        <TableHead>Description</TableHead>
+                        <TableHead>Updated</TableHead>
+                        <TableHead>Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {settings.map((setting) => (
+                        <TableRow key={setting._id}>
+                          <TableCell className="font-medium">{setting.key}</TableCell>
+                          <TableCell>{setting.value}</TableCell>
+                          <TableCell>{setting.description || 'N/A'}</TableCell>
+                          <TableCell>{new Date(setting.updatedAt).toLocaleDateString()}</TableCell>
+                          <TableCell>
+                            <div className="flex space-x-2">
+                              <Dialog>
+                                <DialogTrigger asChild>
+                                  <Button size="sm" variant="outline">
+                                    <Edit className="h-4 w-4" />
+                                  </Button>
+                                </DialogTrigger>
+                                <DialogContent>
+                                  <DialogHeader>
+                                    <DialogTitle>Edit Setting</DialogTitle>
+                                  </DialogHeader>
+                                  <form onSubmit={async (e) => {
+                                    e.preventDefault()
+                                    const formData = new FormData(e.target as HTMLFormElement)
+                                    try {
+                                      await apiClient.updateSystemSetting({
+                                        key: setting.key,
+                                        value: formData.get('value') as string,
+                                        description: formData.get('description') as string
+                                      })
+                                      await fetchData()
+                                      toast({ variant: "success", title: "Setting Updated" })
+                                    } catch (err: any) {
+                                      toast({ variant: "destructive", title: "Update Failed", description: err.message })
+                                    }
+                                  }} className="space-y-4">
+                                    <div>
+                                      <Label>Key</Label>
+                                      <Input value={setting.key} disabled />
+                                    </div>
+                                    <div>
+                                      <Label>Value</Label>
+                                      <Input name="value" defaultValue={setting.value} required />
+                                    </div>
+                                    <div>
+                                      <Label>Description</Label>
+                                      <Input name="description" defaultValue={setting.description || ''} />
+                                    </div>
+                                    <DialogFooter>
+                                      <Button type="submit">Update Setting</Button>
+                                    </DialogFooter>
+                                  </form>
+                                </DialogContent>
+                              </Dialog>
+                              <Button size="sm" variant="outline" className="text-red-600" onClick={async () => {
+                                if (confirm('Delete this setting?')) {
+                                  try {
+                                    await apiClient.deleteSystemSetting(setting.key)
+                                    await fetchData()
+                                    toast({ variant: "success", title: "Setting Deleted" })
+                                  } catch (err: any) {
+                                    toast({ variant: "destructive", title: "Delete Failed", description: err.message })
+                                  }
+                                }
+                              }}>
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            </div>
+          )}
         </div>
       </div>
     </div>
+    </ErrorBoundary>
   )
 }

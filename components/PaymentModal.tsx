@@ -1,10 +1,10 @@
 "use client"
 
-import React, { useEffect } from 'react'
+import React, { useEffect, useState } from 'react'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { CreditCard, Shield, CheckCircle } from 'lucide-react'
+import { CreditCard, Shield, CheckCircle, Loader2 } from 'lucide-react'
 
 declare global {
   interface Window {
@@ -35,6 +35,16 @@ export default function PaymentModal({
   onPaymentSuccess,
   onPaymentError
 }: PaymentModalProps) {
+  const [isProcessing, setIsProcessing] = useState(false)
+  const [paymentStatus, setPaymentStatus] = useState<'idle' | 'processing' | 'success' | 'error'>('idle')
+
+  // Debug logging
+  console.log('💳 PaymentModal props:', { isOpen, paymentData: !!paymentData })
+  
+  useEffect(() => {
+    console.log('💳 PaymentModal state changed:', { isOpen, paymentStatus, isProcessing })
+  }, [isOpen, paymentStatus, isProcessing])
+
   useEffect(() => {
     // Load Razorpay script
     const script = document.createElement('script')
@@ -47,11 +57,27 @@ export default function PaymentModal({
     }
   }, [])
 
+  useEffect(() => {
+    if (!isOpen) {
+      setIsProcessing(false)
+      setPaymentStatus('idle')
+    }
+  }, [isOpen])
+
   const handlePayment = () => {
+    console.log('💳 handlePayment called')
+    console.log('💳 paymentData:', paymentData)
+    console.log('💳 window.Razorpay:', !!window.Razorpay)
+    
     if (!paymentData || !window.Razorpay) {
+      console.error('❌ Payment gateway not loaded or no payment data')
       onPaymentError({ message: 'Payment gateway not loaded' })
       return
     }
+
+    console.log('💳 Starting payment process...')
+    setIsProcessing(true)
+    setPaymentStatus('processing')
 
     const options = {
       key: paymentData.key,
@@ -61,11 +87,14 @@ export default function PaymentModal({
       description: `${paymentData.country} ${paymentData.visaType} Visa`,
       order_id: paymentData.orderId,
       handler: function (response: any) {
-        onPaymentSuccess({
-          razorpay_payment_id: response.razorpay_payment_id,
-          razorpay_order_id: response.razorpay_order_id,
-          razorpay_signature: response.razorpay_signature
-        })
+        setPaymentStatus('success')
+        setTimeout(() => {
+          onPaymentSuccess({
+            razorpay_payment_id: response.razorpay_payment_id,
+            razorpay_order_id: response.razorpay_order_id,
+            razorpay_signature: response.razorpay_signature
+          })
+        }, 1500)
       },
       prefill: {
         name: 'Visa Applicant',
@@ -82,7 +111,11 @@ export default function PaymentModal({
       },
       modal: {
         ondismiss: function() {
-          onPaymentError({ message: 'Payment cancelled by user' })
+          setIsProcessing(false)
+          setPaymentStatus('error')
+          setTimeout(() => {
+            onPaymentError({ message: 'Payment cancelled by user' })
+          }, 1000)
         }
       }
     }
@@ -134,15 +167,46 @@ export default function PaymentModal({
           <span>Secure payment powered by Razorpay</span>
         </div>
 
-        <div className="flex gap-3">
-          <Button variant="outline" onClick={onClose} className="flex-1">
-            Cancel
-          </Button>
-          <Button onClick={handlePayment} className="flex-1">
-            <CreditCard className="h-4 w-4 mr-2" />
-            Pay Now
-          </Button>
-        </div>
+        {paymentStatus === 'processing' && (
+          <div className="flex items-center justify-center py-8">
+            <div className="text-center space-y-4">
+              <Loader2 className="h-8 w-8 animate-spin mx-auto text-blue-600" />
+              <p className="text-sm text-gray-600">Processing your payment...</p>
+              <p className="text-xs text-gray-500">Please do not close this window</p>
+            </div>
+          </div>
+        )}
+
+        {paymentStatus === 'success' && (
+          <div className="flex items-center justify-center py-8">
+            <div className="text-center space-y-4">
+              <CheckCircle className="h-8 w-8 mx-auto text-green-600" />
+              <p className="text-sm text-green-600 font-medium">Payment Successful!</p>
+              <p className="text-xs text-gray-500">Redirecting...</p>
+            </div>
+          </div>
+        )}
+
+        {paymentStatus === 'idle' && (
+          <div className="flex gap-3">
+            <Button variant="outline" onClick={onClose} className="flex-1" disabled={isProcessing}>
+              Cancel
+            </Button>
+            <Button onClick={handlePayment} className="flex-1" disabled={isProcessing}>
+              {isProcessing ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                <>
+                  <CreditCard className="h-4 w-4 mr-2" />
+                  Pay Now
+                </>
+              )}
+            </Button>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   )

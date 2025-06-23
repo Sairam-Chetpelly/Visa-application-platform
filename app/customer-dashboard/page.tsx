@@ -8,18 +8,21 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { AlertWithIcon } from "@/components/ui/alert"
-import { Globe, Plus, FileText, Clock, CheckCircle, AlertCircle, User, LogOut } from "lucide-react"
+import { Globe, Plus, FileText, Clock, CheckCircle, AlertCircle, User, LogOut, CreditCard } from "lucide-react"
 import { useAuth } from "@/hooks/useAuth"
-import { apiClient, type Application, type DashboardStats } from "@/lib/api"
+import { apiClient, type Application, type DashboardStats, type Payment } from "@/lib/api"
 import { ThemeToggle } from "@/components/ui/theme-toggle"
+import PaymentCard from "@/components/PaymentCard"
 
 export default function CustomerDashboard() {
   const router = useRouter()
   const { user, logout, initialized } = useAuth()
   const [applications, setApplications] = useState<Application[]>([])
+  const [payments, setPayments] = useState<Payment[]>([])
   const [stats, setStats] = useState<DashboardStats>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<'applications' | 'payments'>('applications')
 
   useEffect(() => {
     if (!initialized) return
@@ -39,12 +42,14 @@ export default function CustomerDashboard() {
   const fetchData = async () => {
     try {
       setLoading(true)
-      const [applicationsData, statsData] = await Promise.all([
+      const [applicationsData, paymentsData, statsData] = await Promise.all([
         apiClient.getApplications(),
+        apiClient.getCustomerPayments(),
         apiClient.getDashboardStats(),
       ])
 
       setApplications(applicationsData)
+      setPayments(paymentsData)
       setStats(statsData)
     } catch (error: any) {
       setError(error.message || "Failed to fetch data")
@@ -230,87 +235,138 @@ export default function CustomerDashboard() {
           </Card>
         </div>
 
-        {/* Actions */}
+        {/* Navigation Tabs */}
         <div className="flex justify-between items-center mb-6">
-          <h3 className="text-xl font-semibold text-gray-900">Your Applications</h3>
-          <Link href="/new-application">
-            <Button>
-              <Plus className="h-4 w-4 mr-2" />
-              New Application
-            </Button>
-          </Link>
-        </div>
-
-        {/* Applications List */}
-        <div className="space-y-4">
-          {applications.length === 0 ? (
-            <Card>
-              <CardContent className="p-8 text-center">
-                <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">No applications yet</h3>
-                <p className="text-gray-600 mb-4">Start your visa application process today</p>
-                <Link href="/new-application">
-                  <Button>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Create Your First Application
-                  </Button>
-                </Link>
-              </CardContent>
-            </Card>
-          ) : (
-            applications.map((app) => (
-              <Card key={app.id}>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center space-x-3">
-                      {getStatusIcon(app.status)}
-                      <div>
-                        <h4 className="font-semibold text-gray-900">
-                          {app.country_name} - {app.visa_type_name}
-                        </h4>
-                        <p className="text-sm text-gray-600">Application ID: {app.application_number}</p>
-                      </div>
-                    </div>
-                    <Badge className={getStatusColor(app.status)}>{formatStatus(app.status)}</Badge>
-                  </div>
-
-                  <div className="mb-4">
-                    <div className="flex justify-between text-sm text-gray-600 mb-2">
-                      <span>Progress</span>
-                      <span>{getProgressValue(app.status)}%</span>
-                    </div>
-                    <Progress value={getProgressValue(app.status)} className="h-2" />
-                  </div>
-
-                  <div className="flex justify-between items-center text-sm text-gray-600">
-                    <div>
-                      {app.submitted_at && <span>Submitted: {new Date(app.submitted_at).toLocaleDateString()}</span>}
-                    </div>
-                    <div>Last updated: {new Date(app.updated_at).toLocaleDateString()}</div>
-                  </div>
-
-                  <div className="mt-4 flex space-x-2">
-                    <Link href={`/application-details/${app._id}`}>
-                      <Button variant="outline" size="sm">
-                        View Details
-                      </Button>
-                    </Link>
-                    {app.status === "draft" && (
-                      <Link href={`/application-form?id=${app.id}`}>
-                        <Button size="sm">Continue Application</Button>
-                      </Link>
-                    )}
-                    {app.status === "resent" && (
-                      <Link href={`/application-form?id=${app.id}`}>
-                        <Button size="sm">Resubmit</Button>
-                      </Link>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            ))
+          <div className="flex space-x-4">
+            <button
+              onClick={() => setActiveTab('applications')}
+              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                activeTab === 'applications'
+                  ? 'bg-blue-100 text-blue-700'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              <FileText className="h-4 w-4 inline mr-2" />
+              Applications
+            </button>
+            <button
+              onClick={() => setActiveTab('payments')}
+              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                activeTab === 'payments'
+                  ? 'bg-blue-100 text-blue-700'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              <CreditCard className="h-4 w-4 inline mr-2" />
+              Payments
+            </button>
+          </div>
+          {activeTab === 'applications' && (
+            <Link href="/new-application">
+              <Button>
+                <Plus className="h-4 w-4 mr-2" />
+                New Application
+              </Button>
+            </Link>
           )}
         </div>
+
+        {/* Content based on active tab */}
+        {activeTab === 'applications' && (
+          <div className="space-y-4">
+            {applications.length === 0 ? (
+              <Card>
+                <CardContent className="p-8 text-center">
+                  <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No applications yet</h3>
+                  <p className="text-gray-600 mb-4">Start your visa application process today</p>
+                  <Link href="/new-application">
+                    <Button>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Create Your First Application
+                    </Button>
+                  </Link>
+                </CardContent>
+              </Card>
+            ) : (
+              applications.map((app) => (
+                <Card key={app.id}>
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center space-x-3">
+                        {getStatusIcon(app.status)}
+                        <div>
+                          <h4 className="font-semibold text-gray-900">
+                            {app.country_name} - {app.visa_type_name}
+                          </h4>
+                          <p className="text-sm text-gray-600">Application ID: {app.application_number}</p>
+                        </div>
+                      </div>
+                      <Badge className={getStatusColor(app.status)}>{formatStatus(app.status)}</Badge>
+                    </div>
+
+                    <div className="mb-4">
+                      <div className="flex justify-between text-sm text-gray-600 mb-2">
+                        <span>Progress</span>
+                        <span>{getProgressValue(app.status)}%</span>
+                      </div>
+                      <Progress value={getProgressValue(app.status)} className="h-2" />
+                    </div>
+
+                    <div className="flex justify-between items-center text-sm text-gray-600">
+                      <div>
+                        {app.submitted_at && <span>Submitted: {new Date(app.submitted_at).toLocaleDateString()}</span>}
+                      </div>
+                      <div>Last updated: {new Date(app.updated_at).toLocaleDateString()}</div>
+                    </div>
+
+                    <div className="mt-4 flex space-x-2">
+                      <Link href={`/application-details/${app._id}`}>
+                        <Button variant="outline" size="sm">
+                          View Details
+                        </Button>
+                      </Link>
+                      {app.status === "draft" && (
+                        <Link href={`/application-form?id=${app.id}`}>
+                          <Button size="sm">Continue Application</Button>
+                        </Link>
+                      )}
+                      {app.status === "resent" && (
+                        <Link href={`/application-form?id=${app.id}`}>
+                          <Button size="sm">Resubmit</Button>
+                        </Link>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))
+            )}
+          </div>
+        )}
+
+        {activeTab === 'payments' && (
+          <div className="space-y-6">
+            {payments.length === 0 ? (
+              <Card>
+                <CardContent className="p-8 text-center">
+                  <CreditCard className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No payments yet</h3>
+                  <p className="text-gray-600 mb-4">Your payment receipts will appear here after successful transactions</p>
+                </CardContent>
+              </Card>
+            ) : (
+              payments.map((payment) => (
+                <PaymentCard
+                  key={payment._id}
+                  payment={payment}
+                  onDownload={() => {
+                    console.log('Payment receipt downloaded:', payment._id)
+                  }}
+                />
+              ))
+            )}
+          </div>
+        )}
       </div>
     </div>
   )

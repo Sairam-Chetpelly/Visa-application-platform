@@ -181,6 +181,114 @@ const sendNotification = async (userId, type, title, message, applicationId = nu
   }
 }
 
+// Helper function to send payment receipt email
+const sendPaymentReceiptEmail = async (paymentData) => {
+  if (!emailTransporter) return
+  
+  try {
+    const receiptHtml = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd;">
+        <h2 style="color: #2c3e50; text-align: center;">Payment Receipt</h2>
+        <div style="background: #f8f9fa; padding: 15px; border-radius: 5px; margin: 20px 0;">
+          <h3 style="color: #27ae60; margin-top: 0;">Payment Successful ✅</h3>
+          <p><strong>Receipt Number:</strong> ${paymentData.receiptNumber}</p>
+          <p><strong>Payment ID:</strong> ${paymentData.paymentId}</p>
+          <p><strong>Application Number:</strong> ${paymentData.applicationNumber}</p>
+        </div>
+        <div style="margin: 20px 0;">
+          <h4>Customer Details:</h4>
+          <p><strong>Name:</strong> ${paymentData.customerName}</p>
+          <p><strong>Email:</strong> ${paymentData.customerEmail}</p>
+        </div>
+        <div style="margin: 20px 0;">
+          <h4>Visa Details:</h4>
+          <p><strong>Country:</strong> ${paymentData.countryFlag} ${paymentData.country}</p>
+          <p><strong>Visa Type:</strong> ${paymentData.visaType}</p>
+        </div>
+        <div style="background: #e8f5e8; padding: 15px; border-radius: 5px; margin: 20px 0;">
+          <h4 style="margin-top: 0;">Payment Information:</h4>
+          <p><strong>Amount:</strong> ₹${paymentData.amount}</p>
+          <p><strong>Currency:</strong> ${paymentData.currency}</p>
+          <p><strong>Status:</strong> ${paymentData.status.toUpperCase()}</p>
+          <p><strong>Payment Date:</strong> ${new Date(paymentData.paymentDate).toLocaleString()}</p>
+        </div>
+        <div style="text-align: center; margin: 30px 0; color: #666;">
+          <p>Thank you for using VisaFlow!</p>
+          <p style="font-size: 12px;">This is an automated receipt. Please keep it for your records.</p>
+        </div>
+      </div>
+    `
+    
+    await emailTransporter.sendMail({
+      from: process.env.EMAIL_USER,
+      to: paymentData.customerEmail,
+      subject: `Payment Receipt - ${paymentData.applicationNumber}`,
+      html: receiptHtml
+    })
+    
+    console.log(`📧 Payment receipt sent to ${paymentData.customerEmail}`)
+  } catch (error) {
+    console.error("Error sending payment receipt email:", error)
+  }
+}
+
+// Helper function to send new application notification to admin
+const sendNewApplicationNotificationToAdmin = async (applicationData) => {
+  if (!emailTransporter) return
+  
+  try {
+    // Get all admin users
+    const adminUsers = await User.find({ userType: "admin", status: "active" })
+    
+    const notificationHtml = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd;">
+        <h2 style="color: #2c3e50; text-align: center;">New Visa Application Created</h2>
+        <div style="background: #fff3cd; padding: 15px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #ffc107;">
+          <h3 style="color: #856404; margin-top: 0;">🆕 New Application Alert</h3>
+          <p><strong>Application Number:</strong> ${applicationData.applicationNumber}</p>
+          <p><strong>Status:</strong> ${applicationData.status.toUpperCase()}</p>
+        </div>
+        <div style="margin: 20px 0;">
+          <h4>Customer Details:</h4>
+          <p><strong>Name:</strong> ${applicationData.customerName}</p>
+          <p><strong>Email:</strong> ${applicationData.customerEmail}</p>
+        </div>
+        <div style="margin: 20px 0;">
+          <h4>Application Details:</h4>
+          <p><strong>Country:</strong> ${applicationData.countryFlag} ${applicationData.country}</p>
+          <p><strong>Visa Type:</strong> ${applicationData.visaType}</p>
+          <p><strong>Purpose:</strong> ${applicationData.purposeOfVisit || 'Not specified'}</p>
+          <p><strong>Intended Arrival:</strong> ${applicationData.intendedArrivalDate ? new Date(applicationData.intendedArrivalDate).toLocaleDateString() : 'Not specified'}</p>
+        </div>
+        <div style="background: #d1ecf1; padding: 15px; border-radius: 5px; margin: 20px 0;">
+          <h4 style="margin-top: 0;">Application Information:</h4>
+          <p><strong>Submitted At:</strong> ${new Date(applicationData.submittedAt).toLocaleString()}</p>
+          <p><strong>Payment Status:</strong> ${applicationData.paymentStatus || 'Pending'}</p>
+          ${applicationData.assignedTo ? `<p><strong>Assigned To:</strong> ${applicationData.assignedTo}</p>` : '<p><strong>Status:</strong> Awaiting Assignment</p>'}
+        </div>
+        <div style="text-align: center; margin: 30px 0;">
+          <p style="color: #666;">Please review and assign this application to an appropriate processor.</p>
+          <p style="font-size: 12px; color: #999;">This is an automated notification from VisaFlow Admin System.</p>
+        </div>
+      </div>
+    `
+    
+    // Send email to all admin users
+    for (const admin of adminUsers) {
+      await emailTransporter.sendMail({
+        from: process.env.EMAIL_USER,
+        to: admin.email,
+        subject: `New Application: ${applicationData.applicationNumber} - ${applicationData.country}`,
+        html: notificationHtml
+      })
+      
+      console.log(`📧 New application notification sent to admin: ${admin.email}`)
+    }
+  } catch (error) {
+    console.error("Error sending new application notification to admin:", error)
+  }
+}
+
 // Routes
 
 // Health check endpoint
@@ -590,6 +698,26 @@ app.post("/api/applications/:id/create-payment", authenticateToken, async (req, 
         )
       }
 
+      // Send new application notification to admin
+      const appDetails = await VisaApplication.findById(applicationId)
+        .populate('customerId', 'firstName lastName email')
+        .populate('countryId', 'name flagEmoji')
+        .populate('visaTypeId', 'name')
+      
+      await sendNewApplicationNotificationToAdmin({
+        applicationNumber: appDetails.applicationNumber,
+        status: appDetails.status,
+        customerName: `${appDetails.customerId.firstName} ${appDetails.customerId.lastName}`,
+        customerEmail: appDetails.customerId.email,
+        country: appDetails.countryId.name,
+        countryFlag: appDetails.countryId.flagEmoji,
+        visaType: appDetails.visaTypeId.name,
+        purposeOfVisit: appDetails.purposeOfVisit,
+        intendedArrivalDate: appDetails.intendedArrivalDate,
+        submittedAt: appDetails.submittedAt,
+        paymentStatus: 'No Payment Required'
+      })
+
       // Notify customer
       await sendNotification(
         req.user.userId,
@@ -728,6 +856,55 @@ app.post("/api/applications/:id/verify-payment", authenticateToken, async (req, 
       )
     }
 
+    // Get payment details for receipt
+    const paymentDetails = await PaymentOrder.findOne({ razorpayOrderId: razorpay_order_id })
+      .populate({
+        path: 'applicationId',
+        populate: [
+          { path: 'customerId', select: 'firstName lastName email' },
+          { path: 'countryId', select: 'name flagEmoji' },
+          { path: 'visaTypeId', select: 'name' }
+        ]
+      })
+
+    // Send payment receipt email
+    if (paymentDetails) {
+      await sendPaymentReceiptEmail({
+        receiptNumber: razorpay_order_id,
+        paymentId: razorpay_payment_id,
+        applicationNumber: paymentDetails.applicationId.applicationNumber,
+        customerName: `${paymentDetails.applicationId.customerId.firstName} ${paymentDetails.applicationId.customerId.lastName}`,
+        customerEmail: paymentDetails.applicationId.customerId.email,
+        country: paymentDetails.applicationId.countryId.name,
+        countryFlag: paymentDetails.applicationId.countryId.flagEmoji,
+        visaType: paymentDetails.applicationId.visaTypeId.name,
+        amount: paymentDetails.amount,
+        currency: paymentDetails.currency,
+        status: 'paid',
+        paymentDate: new Date()
+      })
+    }
+
+    // Send new application notification to admin
+    const appDetails = await VisaApplication.findById(applicationId)
+      .populate('customerId', 'firstName lastName email')
+      .populate('countryId', 'name flagEmoji')
+      .populate('visaTypeId', 'name')
+    
+    await sendNewApplicationNotificationToAdmin({
+      applicationNumber: appDetails.applicationNumber,
+      status: appDetails.status,
+      customerName: `${appDetails.customerId.firstName} ${appDetails.customerId.lastName}`,
+      customerEmail: appDetails.customerId.email,
+      country: appDetails.countryId.name,
+      countryFlag: appDetails.countryId.flagEmoji,
+      visaType: appDetails.visaTypeId.name,
+      purposeOfVisit: appDetails.purposeOfVisit,
+      intendedArrivalDate: appDetails.intendedArrivalDate,
+      submittedAt: appDetails.submittedAt,
+      paymentStatus: 'Paid'
+    })
+
     // Notify customer
     await sendNotification(
       req.user.userId,
@@ -815,6 +992,26 @@ app.post("/api/applications/:id/submit", authenticateToken, async (req, res) => 
         applicationId,
       )
     }
+
+    // Send new application notification to admin
+    const appDetails = await VisaApplication.findById(applicationId)
+      .populate('customerId', 'firstName lastName email')
+      .populate('countryId', 'name flagEmoji')
+      .populate('visaTypeId', 'name')
+    
+    await sendNewApplicationNotificationToAdmin({
+      applicationNumber: appDetails.applicationNumber,
+      status: appDetails.status,
+      customerName: `${appDetails.customerId.firstName} ${appDetails.customerId.lastName}`,
+      customerEmail: appDetails.customerId.email,
+      country: appDetails.countryId.name,
+      countryFlag: appDetails.countryId.flagEmoji,
+      visaType: appDetails.visaTypeId.name,
+      purposeOfVisit: appDetails.purposeOfVisit,
+      intendedArrivalDate: appDetails.intendedArrivalDate,
+      submittedAt: appDetails.submittedAt,
+      paymentStatus: 'No Payment Required'
+    })
 
     // Notify customer
     await sendNotification(
@@ -1316,6 +1513,383 @@ app.delete("/api/admin/employees/:id", authenticateToken, async (req, res) => {
   }
 })
 
+// Error handling middleware
+app.use((error, req, res, next) => {
+  console.error("Unhandled error:", error)
+  res.status(500).json({ error: "Internal server error" })
+})
+
+// Start server
+app.listen(PORT, async () => {
+  console.log(`🚀 Server running on port ${PORT}`)
+  console.log(`🔍 Health check: http://localhost:${PORT}/api/health`)
+
+  // Connect to MongoDB on startup
+  await connectToMongoDB()
+})
+
+// Country Management (Admin only)
+app.get("/api/admin/countries", authenticateToken, async (req, res) => {
+  try {
+    if (req.user.userType !== "admin") {
+      return res.status(403).json({ error: "Access denied" })
+    }
+    const countries = await Country.find().sort({ name: 1 })
+    res.json(countries)
+  } catch (error) {
+    res.status(500).json({ error: "Internal server error" })
+  }
+})
+
+app.post("/api/admin/countries", authenticateToken, async (req, res) => {
+  try {
+    if (req.user.userType !== "admin") {
+      return res.status(403).json({ error: "Access denied" })
+    }
+    const country = new Country(req.body)
+    await country.save()
+    res.status(201).json({ message: "Country created successfully", country })
+  } catch (error) {
+    res.status(500).json({ error: "Internal server error" })
+  }
+})
+
+app.put("/api/admin/countries/:id", authenticateToken, async (req, res) => {
+  try {
+    if (req.user.userType !== "admin") {
+      return res.status(403).json({ error: "Access denied" })
+    }
+    await Country.findByIdAndUpdate(req.params.id, req.body)
+    res.json({ message: "Country updated successfully" })
+  } catch (error) {
+    res.status(500).json({ error: "Internal server error" })
+  }
+})
+
+app.delete("/api/admin/countries/:id", authenticateToken, async (req, res) => {
+  try {
+    if (req.user.userType !== "admin") {
+      return res.status(403).json({ error: "Access denied" })
+    }
+    await Country.findByIdAndDelete(req.params.id)
+    res.json({ message: "Country deleted successfully" })
+  } catch (error) {
+    res.status(500).json({ error: "Internal server error" })
+  }
+})
+
+// Visa Type Management (Admin only)
+app.get("/api/admin/visa-types", authenticateToken, async (req, res) => {
+  try {
+    if (req.user.userType !== "admin") {
+      return res.status(403).json({ error: "Access denied" })
+    }
+    const visaTypes = await VisaType.find().populate('countryId', 'name').sort({ name: 1 })
+    res.json(visaTypes)
+  } catch (error) {
+    res.status(500).json({ error: "Internal server error" })
+  }
+})
+
+app.post("/api/admin/visa-types", authenticateToken, async (req, res) => {
+  try {
+    if (req.user.userType !== "admin") {
+      return res.status(403).json({ error: "Access denied" })
+    }
+    const visaType = new VisaType(req.body)
+    await visaType.save()
+    res.status(201).json({ message: "Visa type created successfully", visaType })
+  } catch (error) {
+    res.status(500).json({ error: "Internal server error" })
+  }
+})
+
+app.put("/api/admin/visa-types/:id", authenticateToken, async (req, res) => {
+  try {
+    if (req.user.userType !== "admin") {
+      return res.status(403).json({ error: "Access denied" })
+    }
+    await VisaType.findByIdAndUpdate(req.params.id, req.body)
+    res.json({ message: "Visa type updated successfully" })
+  } catch (error) {
+    res.status(500).json({ error: "Internal server error" })
+  }
+})
+
+app.delete("/api/admin/visa-types/:id", authenticateToken, async (req, res) => {
+  try {
+    if (req.user.userType !== "admin") {
+      return res.status(403).json({ error: "Access denied" })
+    }
+    await VisaType.findByIdAndDelete(req.params.id)
+    res.json({ message: "Visa type deleted successfully" })
+  } catch (error) {
+    res.status(500).json({ error: "Internal server error" })
+  }
+})
+
+// System Settings Management (Admin only)
+app.get("/api/admin/settings", authenticateToken, async (req, res) => {
+  try {
+    if (req.user.userType !== "admin") {
+      return res.status(403).json({ error: "Access denied" })
+    }
+    const settings = await SystemSettings.find()
+    res.json(settings)
+  } catch (error) {
+    res.status(500).json({ error: "Internal server error" })
+  }
+})
+
+app.post("/api/admin/settings", authenticateToken, async (req, res) => {
+  try {
+    if (req.user.userType !== "admin") {
+      return res.status(403).json({ error: "Access denied" })
+    }
+    const { key, value, description } = req.body
+    await SystemSettings.findOneAndUpdate(
+      { key },
+      { key, value, description, updatedBy: req.user.userId },
+      { upsert: true }
+    )
+    res.json({ message: "Setting updated successfully" })
+  } catch (error) {
+    res.status(500).json({ error: "Internal server error" })
+  }
+})
+
+app.delete("/api/admin/settings/:key", authenticateToken, async (req, res) => {
+  try {
+    if (req.user.userType !== "admin") {
+      return res.status(403).json({ error: "Access denied" })
+    }
+    await SystemSettings.findOneAndDelete({ key: req.params.key })
+    res.json({ message: "Setting deleted successfully" })
+  } catch (error) {
+    res.status(500).json({ error: "Internal server error" })
+  }
+})
+
+// Get visa types by country (Public)
+app.get("/api/visa-types/:countryId", async (req, res) => {
+  try {
+    const visaTypes = await VisaType.find({ 
+      countryId: req.params.countryId, 
+      isActive: true 
+    })
+    res.json(visaTypes)
+  } catch (error) {
+    res.status(500).json({ error: "Internal server error" })
+  }
+})
+
+export default app
+
+// Get all employees (for admin dashboard)
+app.get("/api/employees", authenticateToken, async (req, res) => {
+  try {
+    if (req.user.userType !== "admin") {
+      return res.status(403).json({ error: "Access denied" })
+    }
+
+    const employees = await User.aggregate([
+      { $match: { userType: 'employee' } },
+      {
+        $lookup: {
+          from: 'employeeprofiles',
+          localField: '_id',
+          foreignField: 'userId',
+          as: 'profile'
+        }
+      },
+      {
+        $project: {
+          firstName: 1,
+          lastName: 1,
+          email: 1,
+          phone: 1,
+          status: 1,
+          createdAt: 1,
+          role: { $arrayElemAt: ['$profile.role', 0] },
+          employeeId: { $arrayElemAt: ['$profile.employeeId', 0] },
+          hireDate: { $arrayElemAt: ['$profile.hireDate', 0] }
+        }
+      }
+    ])
+
+    res.json(employees)
+  } catch (error) {
+    console.error("Error fetching employees:", error)
+    res.status(500).json({ error: "Internal server error" })
+  }
+})
+
+// Get all customers (for admin dashboard)
+app.get("/api/customers", authenticateToken, async (req, res) => {
+  try {
+    if (req.user.userType !== "admin") {
+      return res.status(403).json({ error: "Access denied" })
+    }
+
+    const customers = await User.aggregate([
+      { $match: { userType: 'customer' } },
+      {
+        $lookup: {
+          from: 'customerprofiles',
+          localField: '_id',
+          foreignField: 'userId',
+          as: 'profile'
+        }
+      },
+      {
+        $project: {
+          firstName: 1,
+          lastName: 1,
+          email: 1,
+          phone: 1,
+          status: 1,
+          createdAt: 1,
+          nationality: { $arrayElemAt: ['$profile.nationality', 0] },
+          country: { $arrayElemAt: ['$profile.country', 0] },
+          passportNumber: { $arrayElemAt: ['$profile.passportNumber', 0] }
+        }
+      }
+    ])
+
+    res.json(customers)
+  } catch (error) {
+    console.error("Error fetching customers:", error)
+    res.status(500).json({ error: "Internal server error" })
+  }
+})
+
+// Update employee (for admin dashboard)
+app.put("/api/employees/:id", authenticateToken, async (req, res) => {
+  try {
+    if (req.user.userType !== "admin") {
+      return res.status(403).json({ error: "Access denied" })
+    }
+
+    const { firstName, lastName, email, phone, status, role } = req.body
+    const employeeId = req.params.id
+
+    await User.findByIdAndUpdate(employeeId, {
+      firstName,
+      lastName,
+      email,
+      phone,
+      status
+    })
+
+    await EmployeeProfile.findOneAndUpdate(
+      { userId: employeeId },
+      { role }
+    )
+
+    res.json({ message: "Employee updated successfully" })
+  } catch (error) {
+    console.error("Error updating employee:", error)
+    res.status(500).json({ error: "Internal server error" })
+  }
+})
+
+// Delete employee (for admin dashboard)
+app.delete("/api/employees/:id", authenticateToken, async (req, res) => {
+  try {
+    if (req.user.userType !== "admin") {
+      return res.status(403).json({ error: "Access denied" })
+    }
+
+    const employeeId = req.params.id
+
+    await EmployeeProfile.findOneAndDelete({ userId: employeeId })
+    await User.findByIdAndDelete(employeeId)
+
+    res.json({ message: "Employee deleted successfully" })
+  } catch (error) {
+    console.error("Error deleting employee:", error)
+    res.status(500).json({ error: "Internal server error" })
+  }
+})
+
+// Update customer (for admin dashboard)
+app.put("/api/customers/:id", authenticateToken, async (req, res) => {
+  try {
+    if (req.user.userType !== "admin") {
+      return res.status(403).json({ error: "Access denied" })
+    }
+
+    const { firstName, lastName, email, phone, status } = req.body
+    const customerId = req.params.id
+
+    await User.findByIdAndUpdate(customerId, {
+      firstName,
+      lastName,
+      email,
+      phone,
+      status
+    })
+
+    res.json({ message: "Customer updated successfully" })
+  } catch (error) {
+    console.error("Error updating customer:", error)
+    res.status(500).json({ error: "Internal server error" })
+  }
+})
+
+// Delete customer (for admin dashboard)
+app.delete("/api/customers/:id", authenticateToken, async (req, res) => {
+  try {
+    if (req.user.userType !== "admin") {
+      return res.status(403).json({ error: "Access denied" })
+    }
+
+    const customerId = req.params.id
+
+    await CustomerProfile.findOneAndDelete({ userId: customerId })
+    await User.findByIdAndDelete(customerId)
+
+    res.json({ message: "Customer deleted successfully" })
+  } catch (error) {
+    console.error("Error deleting customer:", error)
+    res.status(500).json({ error: "Internal server error" })
+  }
+})
+
+// Update application (for admin dashboard)
+app.put("/api/applications/:id", authenticateToken, async (req, res) => {
+  try {
+    if (req.user.userType !== "admin") {
+      return res.status(403).json({ error: "Access denied" })
+    }
+
+    const applicationId = req.params.id
+    const updateData = req.body
+
+    await VisaApplication.findByIdAndUpdate(applicationId, updateData)
+    res.json({ message: "Application updated successfully" })
+  } catch (error) {
+    console.error("Error updating application:", error)
+    res.status(500).json({ error: "Internal server error" })
+  }
+})
+
+// Delete application (for admin dashboard)
+app.delete("/api/applications/:id", authenticateToken, async (req, res) => {
+  try {
+    if (req.user.userType !== "admin") {
+      return res.status(403).json({ error: "Access denied" })
+    }
+
+    const applicationId = req.params.id
+    await VisaApplication.findByIdAndDelete(applicationId)
+    res.json({ message: "Application deleted successfully" })
+  } catch (error) {
+    console.error("Error deleting application:", error)
+    res.status(500).json({ error: "Internal server error" })
+  }
+})
+
 // Get all customers (Admin only)
 app.get("/api/admin/customers", authenticateToken, async (req, res) => {
   try {
@@ -1706,6 +2280,181 @@ app.post("/api/applications/bulk-action", authenticateToken, async (req, res) =>
   }
 })
 
+// Get Payment Details
+app.get("/api/payments/:id", authenticateToken, async (req, res) => {
+  try {
+    const paymentId = req.params.id
+    let filter = { _id: paymentId }
+
+    const payment = await PaymentOrder.findOne(filter)
+      .populate({
+        path: 'applicationId',
+        populate: [
+          {
+            path: 'customerId',
+            select: 'firstName lastName email'
+          },
+          {
+            path: 'countryId',
+            select: 'name flagEmoji'
+          },
+          {
+            path: 'visaTypeId',
+            select: 'name fee'
+          }
+        ]
+      })
+
+    if (!payment) {
+      return res.status(404).json({ error: "Payment not found" })
+    }
+
+    // Check permissions
+    if (req.user.userType === "customer") {
+      if (payment.applicationId.customerId._id.toString() !== req.user.userId) {
+        return res.status(403).json({ error: "Access denied" })
+      }
+    }
+    // Admin and employees can see all payments
+
+    res.json(payment)
+  } catch (error) {
+    console.error("Error fetching payment details:", error)
+    res.status(500).json({ error: "Internal server error" })
+  }
+})
+
+// Get Payments (Admin/Employee only)
+app.get("/api/payments", authenticateToken, async (req, res) => {
+  try {
+    if (req.user.userType === "customer") {
+      return res.status(403).json({ error: "Access denied" })
+    }
+
+    const payments = await PaymentOrder.find({})
+      .populate({
+        path: 'applicationId',
+        populate: [
+          {
+            path: 'customerId',
+            select: 'firstName lastName email'
+          },
+          {
+            path: 'countryId',
+            select: 'name flagEmoji'
+          },
+          {
+            path: 'visaTypeId',
+            select: 'name fee'
+          }
+        ]
+      })
+      .sort({ createdAt: -1 })
+
+    res.json(payments)
+  } catch (error) {
+    console.error("Error fetching payments:", error)
+    res.status(500).json({ error: "Internal server error" })
+  }
+})
+
+// Get Customer Payments
+app.get("/api/customer/payments", authenticateToken, async (req, res) => {
+  try {
+    if (req.user.userType !== "customer") {
+      return res.status(403).json({ error: "Access denied" })
+    }
+
+    const payments = await PaymentOrder.find({})
+      .populate({
+        path: 'applicationId',
+        match: { customerId: req.user.userId },
+        populate: [
+          {
+            path: 'customerId',
+            select: 'firstName lastName email'
+          },
+          {
+            path: 'countryId',
+            select: 'name flagEmoji'
+          },
+          {
+            path: 'visaTypeId',
+            select: 'name fee'
+          }
+        ]
+      })
+      .sort({ createdAt: -1 })
+
+    // Filter out payments where applicationId is null (no match)
+    const customerPayments = payments.filter(payment => payment.applicationId)
+
+    res.json(customerPayments)
+  } catch (error) {
+    console.error("Error fetching customer payments:", error)
+    res.status(500).json({ error: "Internal server error" })
+  }
+})
+
+// Download Payment Receipt
+app.get("/api/payments/:id/receipt", authenticateToken, async (req, res) => {
+  try {
+    const paymentId = req.params.id
+
+    const payment = await PaymentOrder.findById(paymentId)
+      .populate({
+        path: 'applicationId',
+        populate: [
+          {
+            path: 'customerId',
+            select: 'firstName lastName email'
+          },
+          {
+            path: 'countryId',
+            select: 'name flagEmoji'
+          },
+          {
+            path: 'visaTypeId',
+            select: 'name fee'
+          }
+        ]
+      })
+
+    if (!payment) {
+      return res.status(404).json({ error: "Payment not found" })
+    }
+
+    // Check permissions
+    if (req.user.userType === "customer") {
+      if (payment.applicationId.customerId._id.toString() !== req.user.userId) {
+        return res.status(403).json({ error: "Access denied" })
+      }
+    }
+
+    // Generate receipt data
+    const receiptData = {
+      receiptNumber: payment.razorpayOrderId,
+      paymentId: payment.razorpayPaymentId,
+      applicationNumber: payment.applicationId.applicationNumber,
+      customerName: `${payment.applicationId.customerId.firstName} ${payment.applicationId.customerId.lastName}`,
+      customerEmail: payment.applicationId.customerId.email,
+      country: payment.applicationId.countryId.name,
+      countryFlag: payment.applicationId.countryId.flagEmoji,
+      visaType: payment.applicationId.visaTypeId.name,
+      amount: payment.amount,
+      currency: payment.currency,
+      status: payment.status,
+      paymentDate: payment.verifiedAt || payment.createdAt,
+      generatedAt: new Date()
+    }
+
+    res.json(receiptData)
+  } catch (error) {
+    console.error("Error generating receipt:", error)
+    res.status(500).json({ error: "Internal server error" })
+  }
+})
+
 // Get all payments (Admin only)
 app.get("/api/admin/payments", authenticateToken, async (req, res) => {
   try {
@@ -1720,6 +2469,41 @@ app.get("/api/admin/payments", authenticateToken, async (req, res) => {
           { path: 'customerId', select: 'firstName lastName email' },
           { path: 'countryId', select: 'name' },
           { path: 'visaTypeId', select: 'name' }
+        ]
+      })
+      .sort({ createdAt: -1 })
+
+    res.json(payments)
+  } catch (error) {
+    console.error("Error fetching payments:", error)
+    res.status(500).json({ error: "Internal server error" })
+  }
+})
+
+// Get all payments (for admin dashboard - alternative endpoint)
+app.get("/api/payments", authenticateToken, async (req, res) => {
+  try {
+    if (req.user.userType === "customer") {
+      // For customers, redirect to customer payments
+      return res.redirect('/api/customer/payments')
+    }
+
+    const payments = await PaymentOrder.find({})
+      .populate({
+        path: 'applicationId',
+        populate: [
+          {
+            path: 'customerId',
+            select: 'firstName lastName email'
+          },
+          {
+            path: 'countryId',
+            select: 'name flagEmoji'
+          },
+          {
+            path: 'visaTypeId',
+            select: 'name fee'
+          }
         ]
       })
       .sort({ createdAt: -1 })
@@ -1764,98 +2548,3 @@ app.delete("/api/admin/applications/:id", authenticateToken, async (req, res) =>
     res.status(500).json({ error: "Internal server error" })
   }
 })
-
-// Get user profile
-app.get("/api/profile", authenticateToken, async (req, res) => {
-  try {
-    console.log("Fetching profile for user:", req.user.userId)
-    const user = await User.findById(req.user.userId)
-    if (!user) {
-      console.log("User not found:", req.user.userId)
-      return res.status(404).json({ error: "User not found" })
-    }
-
-    let profile = null
-    if (user.userType === "customer") {
-      profile = await CustomerProfile.findOne({ userId: req.user.userId })
-      console.log("Customer profile found:", !!profile)
-    } else if (user.userType === "employee") {
-      profile = await EmployeeProfile.findOne({ userId: req.user.userId })
-      console.log("Employee profile found:", !!profile)
-    }
-
-    const response = {
-      user: {
-        id: user._id,
-        email: user.email,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        phone: user.phone,
-        userType: user.userType,
-        status: user.status
-      },
-      profile
-    }
-    console.log("Sending profile response:", response)
-    res.json(response)
-  } catch (error) {
-    console.error("Error fetching profile:", error)
-    res.status(500).json({ error: "Internal server error", details: error.message })
-  }
-})
-
-// Update user profile
-app.put("/api/profile", authenticateToken, async (req, res) => {
-  try {
-    console.log("Updating profile for user:", req.user.userId)
-    console.log("Update data:", req.body)
-    const { firstName, lastName, phone, profileData } = req.body
-
-    // Update user basic info
-    const updatedUser = await User.findByIdAndUpdate(req.user.userId, {
-      firstName,
-      lastName,
-      phone
-    }, { new: true })
-    console.log("User updated:", updatedUser)
-
-    // Update profile based on user type
-    if (req.user.userType === "customer" && profileData) {
-      const updatedProfile = await CustomerProfile.findOneAndUpdate(
-        { userId: req.user.userId },
-        profileData,
-        { upsert: true, new: true }
-      )
-      console.log("Customer profile updated:", updatedProfile)
-    } else if (req.user.userType === "employee" && profileData) {
-      const updatedProfile = await EmployeeProfile.findOneAndUpdate(
-        { userId: req.user.userId },
-        profileData,
-        { new: true }
-      )
-      console.log("Employee profile updated:", updatedProfile)
-    }
-
-    res.json({ message: "Profile updated successfully" })
-  } catch (error) {
-    console.error("Error updating profile:", error)
-    res.status(500).json({ error: "Internal server error", details: error.message })
-  }
-})
-
-// Error handling middleware
-app.use((error, req, res, next) => {
-  console.error("Unhandled error:", error)
-  res.status(500).json({ error: "Internal server error" })
-})
-
-// Start server
-app.listen(PORT, async () => {
-  console.log(`🚀 Server running on port ${PORT}`)
-  console.log(`🔍 Health check: http://localhost:${PORT}/api/health`)
-
-  // Connect to MongoDB on startup
-  await connectToMongoDB()
-})
-
-export default app
