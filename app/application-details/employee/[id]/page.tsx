@@ -139,8 +139,11 @@ export default function EmployeeApplicationDetailsPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-4">
             <div className="flex items-center space-x-2">
-              <Globe className="h-8 w-8 text-blue-600" />
-              <h1 className="text-2xl font-bold text-gray-900">VisaFlow - Employee Portal</h1>
+              <div className="bg-blue-600 text-white px-4 py-2 rounded border-2 border-white">
+                <div className="text-lg font-bold">OPTIONS</div>
+                <div className="text-xs">Travel Services</div>
+              </div>
+              <span className="text-xl font-bold text-gray-900 ml-2">- Employee Portal</span>
             </div>
             <Link href="/employee-dashboard">
               <Button variant="ghost">

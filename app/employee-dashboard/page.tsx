@@ -15,17 +15,23 @@ import { AlertWithIcon } from "@/components/ui/alert"
 import { Globe, Search, Filter, Eye, CheckCircle, XCircle, RotateCcw, User, LogOut, TrendingUp } from "lucide-react"
 import Link from "next/link"
 import { ThemeToggle } from "@/components/ui/theme-toggle"
+import { usePagination, useClientPagination } from "@/hooks/usePagination"
+import { TablePagination } from "@/components/ui/table-pagination"
 
 export default function EmployeeDashboard() {
   const router = useRouter()
   const { user, logout,initialized } = useAuth()
   const { toast } = useToast()
-  const [applications, setApplications] = useState<Application[]>([])
   const [stats, setStats] = useState<DashboardStats>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
+
+  const applicationsPagination = usePagination({ 
+    fetchData: (page, limit) => apiClient.getApplications(page, limit),
+    itemsPerPage: 10 
+  })
 
   useEffect(() => {
     if (!initialized) return
@@ -45,22 +51,8 @@ export default function EmployeeDashboard() {
   const fetchData = async () => {
     try {
       setLoading(true)
-      const [applicationsData, statsData] = await Promise.all([
-        apiClient.getApplications(),
-        apiClient.getDashboardStats(),
-      ])
-
-      setApplications(applicationsData || [])
-      setStats({
-        pending_review: applicationsData?.filter(app => app.status === "under_review").length || 0,
-        approved_today: applicationsData?.filter(app => 
-          app.status === "approved" && 
-          new Date(app.updated_at).toDateString() === new Date().toDateString()
-        ).length || 0,
-        high_priority: applicationsData?.filter(app => app.priority === "high").length || 0,
-        assigned_applications: applicationsData?.filter(app => app.assignedTo?._id === user?.userId).length || 0,
-        ...statsData
-      })
+      const statsData = await apiClient.getDashboardStats()
+      setStats(statsData)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to fetch data")
     } finally {
@@ -140,14 +132,6 @@ export default function EmployeeDashboard() {
     }
   }
 
-  const filteredApplications = applications.filter((app) => {
-    const matchesSearch =
-      (app.customerName && app.customerName.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (app.id && app.id.toString().toLowerCase().includes(searchTerm.toLowerCase()))
-    const matchesStatus = statusFilter === "all" || app.status.toLowerCase().replace(" ", "-") === statusFilter
-    return matchesSearch && matchesStatus
-  })
-
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -184,8 +168,11 @@ export default function EmployeeDashboard() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-4">
             <div className="flex items-center space-x-2">
-              <Globe className="h-8 w-8 text-blue-600" />
-              <h1 className="text-2xl font-bold text-gray-900">VisaFlow - Employee Portal</h1>
+              <div className="bg-blue-600 text-white px-4 py-2 rounded border-2 border-white">
+                <div className="text-lg font-bold">OPTIONS</div>
+                <div className="text-xs">Travel Services</div>
+              </div>
+              <span className="text-xl font-bold text-gray-900 ml-2">- Employee Portal</span>
             </div>
             <div className="flex items-center space-x-4">
               <ThemeToggle />
@@ -337,7 +324,7 @@ export default function EmployeeDashboard() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredApplications.map((app) => (
+                  {applicationsPagination.paginatedData.map((app) => (
                     <TableRow key={app.id}>
                       <TableCell className="font-medium">{app.application_number}</TableCell>
                       <TableCell>{(app.customerId?.firstName && app.customerId?.lastName) ? `${app.customerId.firstName} ${app.customerId.lastName}` : "N/A"}</TableCell>
@@ -418,6 +405,18 @@ export default function EmployeeDashboard() {
                   ))}
                 </TableBody>
               </Table>
+              <TablePagination
+                currentPage={applicationsPagination.currentPage}
+                totalPages={applicationsPagination.totalPages}
+                pageSize={applicationsPagination.pageSize}
+                totalItems={applicationsPagination.totalItems}
+                startIndex={applicationsPagination.startIndex}
+                endIndex={applicationsPagination.endIndex}
+                onPageChange={applicationsPagination.goToPage}
+                onPageSizeChange={applicationsPagination.changePageSize}
+                hasNextPage={applicationsPagination.hasNextPage}
+                hasPreviousPage={applicationsPagination.hasPreviousPage}
+              />
             </div>
           </CardContent>
         </Card>

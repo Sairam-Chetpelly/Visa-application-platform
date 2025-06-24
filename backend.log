@@ -1,0 +1,185 @@
+✅ Razorpay payment gateway configured
+✅ Email service configured
+🚀 Server running on port 3001
+🔍 Health check: http://localhost:3001/api/health
+✅ MongoDB connected successfully!
+Fetching unique continents from MongoDB...
+Found 6 unique continents: [
+  'Africa',
+  'Asia',
+  'Europe',
+  'North America',
+  'Oceania',
+  'South America'
+]
+Fetching countries from MongoDB...
+Fetching unique continents from MongoDB...
+Found 20 countries
+Found 6 unique continents: [
+  'Africa',
+  'Asia',
+  'Europe',
+  'North America',
+  'Oceania',
+  'South America'
+]
+Fetching unique continents from MongoDB...
+Found 6 unique continents: [
+  'Africa',
+  'Asia',
+  'Europe',
+  'North America',
+  'Oceania',
+  'South America'
+]
+Returning 20 countries with visa types
+Fetching countries from MongoDB...
+Found 20 countries
+Returning 20 countries with visa types
+Fetching countries from MongoDB...
+Found 20 countries
+Returning 20 countries with visa types
+📧 Email sent to sairamchettpelli@gmail.com: Welcome to VisaFlow
+Fetching countries from MongoDB...
+Found 20 countries
+Returning 20 countries with visa types
+Fetching countries from MongoDB...
+Found 20 countries
+Returning 20 countries with visa types
+Fetching unique continents from MongoDB...
+Found 6 unique continents: [
+  'Africa',
+  'Asia',
+  'Europe',
+  'North America',
+  'Oceania',
+  'South America'
+]
+Fetching countries from MongoDB...
+Found 20 countries
+Returning 20 countries with visa types
+Fetching countries from MongoDB...
+Fetching unique continents from MongoDB...
+Found 20 countries
+Found 6 unique continents: [
+  'Africa',
+  'Asia',
+  'Europe',
+  'North America',
+  'Oceania',
+  'South America'
+]
+Fetching unique continents from MongoDB...
+Found 6 unique continents: [
+  'Africa',
+  'Asia',
+  'Europe',
+  'North America',
+  'Oceania',
+  'South America'
+]
+Returning 20 countries with visa types
+Fetching countries from MongoDB...
+Found 20 countries
+Returning 20 countries with visa types
+Fetching countries from MongoDB...
+Found 20 countries
+Returning 20 countries with visa types
+Fetching countries from MongoDB...
+Found 20 countries
+Returning 20 countries with visa types
+Fetching countries from MongoDB...
+Found 20 countries
+Returning 20 countries with visa types
+Fetching countries from MongoDB...
+Found 20 countries
+Returning 20 countries with visa types
+Creating visa application: {
+  countryId: '685a4ff15ef1a407059cbebd',
+  visaTypeId: '685a4ff15ef1a407059cbed2',
+  personalInfo: {
+    firstName: 'Sairam',
+    lastName: 'Chetpelly',
+    dateOfBirth: '2025-06-24',
+    placeOfBirth: 'bhiwandi',
+    nationality: 'indian',
+    gender: 'male',
+    maritalStatus: ''
+  },
+  contactInfo: {
+    email: 'sairamchettpelli@gmail.com',
+    phone: '07757915697',
+    address: 'padmanager',
+    city: 'Bhiwandi',
+    postalCode: '421305'
+  },
+  passportInfo: {
+    passportNumber: '12345',
+    passportIssueDate: '2025-06-24',
+    passportExpiryDate: '2025-06-24',
+    passportIssuePlace: 'bhiwandi'
+  },
+  travelInfo: {
+    purposeOfVisit: 'study',
+    intendedArrival: '2025-06-12',
+    intendedDeparture: '2025-06-24',
+    accommodationDetails: ',kjx'
+  },
+  employmentInfo: {
+    occupation: '',
+    employer: '',
+    employerAddress: '',
+    monthlyIncome: 0
+  },
+  additionalInfo: {
+    previousVisits: '',
+    criminalRecord: false,
+    medicalConditions: '',
+    additionalInfo: ''
+  }
+}
+Application created with ID: new ObjectId('685a61f95f8c9b93a4f60b98')
+Looking for application: 685a61f95f8c9b93a4f60b98 for user: 685a52195f8c9b93a4f608a1
+Found application: APP785036
+Visa type: Tourist Fee: 100
+Country: Japan
+📧 Email sent to alice.johnson@visaflow.com: New Application Assigned
+📧 Payment receipt sent to sairamchettpelli@gmail.com
+📧 New application notification sent to admin: admin@visaflow.com
+📧 Email sent to sairamchettpelli@gmail.com: Application Submitted Successfully
+Fetching countries from MongoDB...
+Fetching unique continents from MongoDB...
+Found 20 countries
+Found 6 unique continents: [
+  'Africa',
+  'Asia',
+  'Europe',
+  'North America',
+  'Oceania',
+  'South America'
+]
+Fetching unique continents from MongoDB...
+Found 6 unique continents: [
+  'Africa',
+  'Asia',
+  'Europe',
+  'North America',
+  'Oceania',
+  'South America'
+]
+Returning 20 countries with visa types
+Fetching countries from MongoDB...
+Found 20 countries
+Returning 20 countries with visa types
+Fetching countries from MongoDB...
+Found 20 countries
+Returning 20 countries with visa types
+Fetching countries from MongoDB...
+Found 20 countries
+Returning 20 countries with visa types
+Fetching countries from MongoDB...
+Found 20 countries
+Returning 20 countries with visa types
+Fetching countries from MongoDB...
+Found 20 countries
+Returning 20 countries with visa types

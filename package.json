@@ -14,6 +14,11 @@
     "setup:mongodb": "node scripts/setup-mongodb.js",
     "setup-db": "node scripts/setup-mongodb.js",
     "setup-db-mysql": "node scripts/setup-database.js",
+    "migrate:fresh": "node run-migration.js",
+    "db:fresh": "node run-migration.js",
+    "migration:fresh": "node run-migration.js",
+    "verify:migration": "node verify-migration.js",
+    "db:verify": "node verify-migration.js",
     "verify:mongodb": "node scripts/verify-mongodb.js",
     "verify-db": "node scripts/verify-mongodb.js",
     "test:api": "node test-api.js",
@@ -26,7 +31,9 @@
     "start": "next start",
     "debug:payment": "node debug-payment.js",
     "test:backend": "node test-backend.js",
-    "dev:full": "./start-dev.sh"
+    "dev:full": "./start-dev.sh",
+    "seed:countries": "node scripts/seed-countries-mongodb.js",
+    "seed-countries": "./seed-countries.sh"
   },
   "dependencies": {
     "@radix-ui/react-accordion": "^1.1.2",

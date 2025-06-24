@@ -126,7 +126,10 @@ export default function ProfilePage() {
             <ThemeToggle />
           </div>
           <div className="flex items-center space-x-3">
-            <User className="h-8 w-8 text-blue-600" />
+            <div className="bg-blue-600 text-white px-3 py-2 rounded border-2 border-white">
+              <div className="text-sm font-bold">OPTIONS</div>
+              <div className="text-xs">Travel Services</div>
+            </div>
             <div>
               <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">My Profile</h1>
               <p className="text-gray-600 dark:text-gray-300">Manage your account information</p>

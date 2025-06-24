@@ -6,8 +6,8 @@ import { ThemeProvider } from "@/hooks/useTheme"
 import { Toaster } from "@/components/ui/toaster"
 
 export const metadata: Metadata = {
-  title: "VisaFlow - Visa Application Management System",
-  description: "Comprehensive visa application management platform",
+  title: "OPTIONS Travel Services - Visa Application Management System",
+  description: "Comprehensive visa application management platform by OPTIONS Travel Services",
     generator: 'v0.dev'
 }
 

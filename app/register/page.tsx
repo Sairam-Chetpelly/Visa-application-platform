@@ -8,20 +8,16 @@ import { useAuth } from "@/hooks/useAuth"
 import { useToast } from "@/hooks/useToast"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Checkbox } from "@/components/ui/checkbox"
 import { AlertWithIcon } from "@/components/ui/alert"
-import { Globe, ArrowLeft } from "lucide-react"
-import { ThemeToggle } from "@/components/ui/theme-toggle"
 
 export default function RegisterPage() {
   const router = useRouter()
   const { register, loading, error } = useAuth()
   const { toast } = useToast()
+  const [activeTab, setActiveTab] = useState<'login' | 'signup'>('signup')
   const [formData, setFormData] = useState({
+    fullName: "",
     firstName: "",
     lastName: "",
     email: "",
@@ -33,8 +29,7 @@ export default function RegisterPage() {
   })
   const [submitError, setSubmitError] = useState<string | null>(null)
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleSubmit = async () => {
     setSubmitError(null)
 
     if (formData.password !== formData.confirmPassword) {
@@ -42,22 +37,21 @@ export default function RegisterPage() {
       return
     }
 
-    if (!formData.agreeTerms) {
-      setSubmitError("Please agree to the terms and conditions")
-      return
-    }
+    // Split full name into first and last name
+    const nameParts = formData.fullName.trim().split(' ')
+    const firstName = nameParts[0] || ''
+    const lastName = nameParts.slice(1).join(' ') || ''
 
     try {
       await register({
-        firstName: formData.firstName,
-        lastName: formData.lastName,
+        firstName,
+        lastName,
         email: formData.email,
         mobile: formData.mobile,
         password: formData.password,
-        country: formData.country,
+        country: formData.country || 'other',
       })
 
-      // Show success message and redirect to login
       toast({
         variant: "success",
         title: "Registration Successful!",
@@ -79,155 +73,197 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <div className="flex justify-between items-center mb-4">
-            <Link href="/" className="inline-flex items-center text-blue-600 hover:text-blue-700">
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Home
-            </Link>
-            <ThemeToggle />
-          </div>
-          <div className="flex items-center justify-center space-x-2 mb-4">
-            <Globe className="h-8 w-8 text-blue-600" />
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">VisaFlow</h1>
+    <div className="min-h-screen flex">
+      {/* Left Side - Illustration and Content */}
+      <div className="flex-1 bg-gradient-to-br from-pink-200 via-purple-200 to-blue-200 flex flex-col justify-center items-center p-12 relative overflow-hidden">
+        {/* Logo */}
+        <div className="absolute top-8 left-8">
+          <div className="bg-blue-600 text-white px-6 py-3 rounded border-2 border-white">
+            <div className="text-xl font-bold">OPTIONS</div>
+            <div className="text-xs">Travel Services</div>
           </div>
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Create Your Account</CardTitle>
-            <CardDescription>
-              Join thousands of satisfied customers who trust us with their visa applications.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {(error || submitError) && (
-                <AlertWithIcon 
-                  variant="destructive" 
-                  title="Registration Error"
-                  description={error || submitError}
-                  className="mb-4"
-                />
-              )}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="firstName">First Name</Label>
-                  <Input
-                    id="firstName"
-                    value={formData.firstName}
-                    onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
-                    required
+        {/* Main Illustration */}
+        <div className="relative mb-8">
+          {/* Background Stars */}
+          <div className="absolute -top-10 -left-10 text-white text-2xl">★</div>
+          <div className="absolute -top-5 right-5 text-white text-lg">★</div>
+          <div className="absolute bottom-0 -left-8 text-white text-xl">★</div>
+          <div className="absolute -bottom-5 right-0 text-white text-sm">★</div>
+          <div className="absolute top-1/2 -right-12 text-white text-lg">★</div>
+          
+          {/* Main Badge/Medal */}
+          <div className="relative">
+            {/* Ribbon Background */}
+            <div className="w-64 h-64 bg-gradient-to-b from-orange-400 to-red-500 rounded-full relative flex items-center justify-center">
+              {/* Ribbon Spikes */}
+              <div className="absolute inset-0">
+                {[...Array(16)].map((_, i) => (
+                  <div 
+                    key={i}
+                    className="absolute w-4 h-16 bg-gradient-to-b from-orange-400 to-red-500 origin-bottom"
+                    style={{
+                      transform: `rotate(${i * 22.5}deg) translateY(-32px)`,
+                      transformOrigin: '50% 128px'
+                    }}
                   />
+                ))}
+              </div>
+              
+              {/* Center Circle */}
+              <div className="w-40 h-40 bg-white rounded-full flex items-center justify-center z-10 relative">
+                {/* Person Illustration */}
+                <div className="text-6xl">
+                  <div className="w-20 h-20 bg-gray-700 rounded-full relative mb-2 mx-auto">
+                    {/* Simple face */}
+                    <div className="absolute top-6 left-6 w-2 h-2 bg-white rounded-full"></div>
+                    <div className="absolute top-6 right-6 w-2 h-2 bg-white rounded-full"></div>
+                    <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 w-4 h-2 bg-white rounded-full"></div>
+                  </div>
+                  <div className="w-16 h-12 bg-gray-700 rounded-t-3xl mx-auto"></div>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="lastName">Last Name</Label>
-                  <Input
-                    id="lastName"
-                    value={formData.lastName}
-                    onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
-                    required
-                  />
-                </div>
+                
+                {/* Thumbs up */}
+                <div className="absolute -right-2 top-8 text-2xl">👍</div>
               </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="email">Email Address</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  required
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="mobile">Mobile Number</Label>
-                <Input
-                  id="mobile"
-                  type="tel"
-                  value={formData.mobile}
-                  onChange={(e) => setFormData({ ...formData, mobile: e.target.value })}
-                  required
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="country">Country of Residence</Label>
-                <Select onValueChange={(value) => setFormData({ ...formData, country: value })}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select your country" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="us">United States</SelectItem>
-                    <SelectItem value="uk">United Kingdom</SelectItem>
-                    <SelectItem value="ca">Canada</SelectItem>
-                    <SelectItem value="au">Australia</SelectItem>
-                    <SelectItem value="in">India</SelectItem>
-                    <SelectItem value="other">Other</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  value={formData.password}
-                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  required
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="confirmPassword">Confirm Password</Label>
-                <Input
-                  id="confirmPassword"
-                  type="password"
-                  value={formData.confirmPassword}
-                  onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-                  required
-                />
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="terms"
-                  checked={formData.agreeTerms}
-                  onCheckedChange={(checked) => setFormData({ ...formData, agreeTerms: checked as boolean })}
-                />
-                <Label htmlFor="terms" className="text-sm">
-                  I agree to the{" "}
-                  <Link href="/terms" className="text-blue-600 hover:underline">
-                    Terms of Service
-                  </Link>{" "}
-                  and{" "}
-                  <Link href="/privacy" className="text-blue-600 hover:underline">
-                    Privacy Policy
-                  </Link>
-                </Label>
-              </div>
-
-              <Button type="submit" className="w-full" disabled={!formData.agreeTerms || loading}>
-                {loading ? "Creating Account..." : "Create Account"}
-              </Button>
-            </form>
-
-            <div className="mt-6 text-center">
-              <p className="text-sm text-gray-600">
-                Already have an account?{" "}
-                <Link href="/login" className="text-blue-600 hover:underline">
-                  Sign in here
-                </Link>
-              </p>
             </div>
-          </CardContent>
-        </Card>
+            
+            {/* Checkmark */}
+            <div className="absolute -top-4 -right-4 w-12 h-12 bg-white rounded-full flex items-center justify-center border-4 border-green-500">
+              <div className="text-green-500 text-xl font-bold">✓</div>
+            </div>
+            
+            {/* Documents */}
+            <div className="absolute -bottom-8 -left-8 w-16 h-20 bg-white rounded-lg shadow-lg transform -rotate-12">
+              <div className="p-2 space-y-1">
+                <div className="h-1 bg-gray-300 rounded"></div>
+                <div className="h-1 bg-gray-300 rounded"></div>
+                <div className="h-1 bg-gray-300 rounded w-3/4"></div>
+              </div>
+            </div>
+            
+            <div className="absolute -bottom-4 -left-4 w-16 h-20 bg-white rounded-lg shadow-lg transform rotate-6">
+              <div className="p-2 space-y-1">
+                <div className="h-1 bg-gray-300 rounded"></div>
+                <div className="h-1 bg-gray-300 rounded"></div>
+                <div className="h-1 bg-gray-300 rounded w-2/3"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Text Content */}
+        <div className="text-center max-w-md">
+          <h2 className="text-2xl font-bold text-gray-800 mb-4">Professional & Trustworthy</h2>
+          <p className="text-lg text-gray-700 leading-relaxed">
+            "Trusted Visa Assistance for Global Travel Needs"
+          </p>
+        </div>
+      </div>
+
+      {/* Right Side - Registration Form */}
+      <div className="flex-1 bg-white flex flex-col justify-center items-center p-8">
+        {/* Tab Header */}
+        <div className="flex border-b w-full max-w-md mb-8">
+          <button
+            className={`flex-1 py-4 px-6 text-center ${
+              activeTab === 'login' 
+                ? 'bg-gray-100 text-gray-700 border-b-2 border-gray-300' 
+                : 'text-gray-500'
+            }`}
+            onClick={() => router.push('/login')}
+          >
+            Login
+          </button>
+          <button
+            className={`flex-1 py-4 px-6 text-center ${
+              activeTab === 'signup' 
+                ? 'bg-orange-50 text-orange-600 border-b-2 border-orange-500' 
+                : 'text-gray-500'
+            }`}
+            onClick={() => setActiveTab('signup')}
+          >
+            Sign Up
+          </button>
+        </div>
+
+        {/* Form Content */}
+        <div className="w-full max-w-md">
+          {(error || submitError) && (
+            <AlertWithIcon 
+              variant="destructive" 
+              title="Registration Error"
+              description={error || submitError}
+              className="mb-4"
+            />
+          )}
+          
+          <div className="space-y-6">
+            <div>
+              <Input
+                type="text"
+                placeholder="Full Name"
+                value={formData.fullName}
+                onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
+                className="w-full p-4 border border-gray-300 rounded-lg text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                required
+              />
+            </div>
+
+            <div>
+              <Input
+                type="tel"
+                placeholder="Mobile Number"
+                value={formData.mobile}
+                onChange={(e) => setFormData({ ...formData, mobile: e.target.value })}
+                className="w-full p-4 border border-gray-300 rounded-lg text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                required
+              />
+            </div>
+
+            <div>
+              <Input
+                type="email"
+                placeholder="Email"
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                className="w-full p-4 border border-gray-300 rounded-lg text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                required
+              />
+            </div>
+
+            <div>
+              <Input
+                type="password"
+                placeholder="Create Password"
+                value={formData.password}
+                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                className="w-full p-4 border border-gray-300 rounded-lg text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                required
+              />
+            </div>
+
+            <div>
+              <Input
+                type="password"
+                placeholder="Re Enter Password"
+                value={formData.confirmPassword}
+                onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                className="w-full p-4 border border-gray-300 rounded-lg text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                required
+              />
+            </div>
+
+            <Button
+              onClick={handleSubmit}
+              disabled={loading}
+              className="w-full bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-semibold py-4 px-6 rounded-lg transition duration-200 shadow-lg"
+            >
+              {loading ? "Creating Account..." : "Sign Up"}
+            </Button>
+          </div>
+        </div>
       </div>
     </div>
   )

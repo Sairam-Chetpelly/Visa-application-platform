@@ -24,6 +24,20 @@ import {
   SystemSettings
 } from "./mongodb-models.js"
 
+// Import list endpoints
+import {
+  listUsers,
+  listCountries,
+  listVisaTypes,
+  listApplications,
+  listPayments,
+  listNotifications,
+  listApplicationStatusHistory,
+  listApplicationDocuments,
+  listSystemSettings,
+  getDashboardStats as getComprehensiveDashboardStats
+} from "./list-endpoints.js"
+
 // Load environment variables
 dotenv.config()
 
@@ -428,6 +442,186 @@ app.post("/api/login", async (req, res) => {
   }
 })
 
+// Forgot Password
+app.post("/api/forgot-password", async (req, res) => {
+  try {
+    const { email } = req.body
+
+    // Validate required fields
+    if (!email) {
+      return res.status(400).json({ error: "Email is required" })
+    }
+
+    // Get user
+    const user = await User.findOne({ email })
+    if (!user) {
+      // Don't reveal if email exists or not for security
+      return res.json({ message: "If the email exists, a reset link has been sent" })
+    }
+
+    // Generate reset token
+    const resetToken = jwt.sign(
+      { userId: user._id, email: user.email },
+      JWT_SECRET + user.passwordHash, // Include password hash to invalidate token when password changes
+      { expiresIn: "1h" }
+    )
+
+    // Create reset URL
+    const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password?token=${resetToken}`
+
+    // Send reset email if email service is configured
+    if (emailTransporter) {
+      try {
+        await emailTransporter.sendMail({
+          from: process.env.EMAIL_USER,
+          to: user.email,
+          subject: "Password Reset Request - VisaFlow",
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+              <h2 style="color: #2c3e50; text-align: center;">Password Reset Request</h2>
+              <div style="background: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0;">
+                <p>Hello ${user.firstName},</p>
+                <p>We received a request to reset your password for your VisaFlow account.</p>
+                <p>Click the button below to reset your password:</p>
+                <div style="text-align: center; margin: 30px 0;">
+                  <a href="${resetUrl}" style="background: #007bff; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block;">Reset Password</a>
+                </div>
+                <p>Or copy and paste this link in your browser:</p>
+                <p style="word-break: break-all; color: #666;">${resetUrl}</p>
+                <p><strong>This link will expire in 1 hour.</strong></p>
+                <p>If you didn't request this password reset, please ignore this email.</p>
+              </div>
+              <div style="text-align: center; color: #666; font-size: 12px;">
+                <p>This is an automated email from VisaFlow. Please do not reply.</p>
+              </div>
+            </div>
+          `
+        })
+        console.log(`📧 Password reset email sent to ${user.email}`)
+      } catch (emailError) {
+        console.error("Error sending reset email:", emailError)
+        return res.status(500).json({ error: "Failed to send reset email" })
+      }
+    } else {
+      console.log(`⚠️  Email service not configured. Reset token for ${user.email}: ${resetToken}`)
+    }
+
+    res.json({ message: "If the email exists, a reset link has been sent" })
+  } catch (error) {
+    console.error("Forgot password error:", error)
+    res.status(500).json({ error: "Internal server error" })
+  }
+})
+
+// Reset Password
+app.post("/api/reset-password", async (req, res) => {
+  try {
+    const { token, password } = req.body
+
+    // Validate required fields
+    if (!token || !password) {
+      return res.status(400).json({ error: "Token and password are required" })
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ error: "Password must be at least 6 characters long" })
+    }
+
+    // Decode token to get user info
+    let decoded
+    try {
+      // First decode without verification to get user ID
+      const unverified = jwt.decode(token)
+      if (!unverified || !unverified.userId) {
+        return res.status(400).json({ error: "Invalid token" })
+      }
+
+      // Get user to include password hash in verification
+      const user = await User.findById(unverified.userId)
+      if (!user) {
+        return res.status(400).json({ error: "Invalid token" })
+      }
+
+      // Verify token with password hash
+      decoded = jwt.verify(token, JWT_SECRET + user.passwordHash)
+    } catch (jwtError) {
+      return res.status(400).json({ error: "Invalid or expired token" })
+    }
+
+    // Get user
+    const user = await User.findById(decoded.userId)
+    if (!user) {
+      return res.status(400).json({ error: "User not found" })
+    }
+
+    // Hash new password
+    const passwordHash = await bcrypt.hash(password, 10)
+
+    // Update password
+    await User.findByIdAndUpdate(user._id, { passwordHash })
+
+    // Send confirmation email
+    if (emailTransporter) {
+      try {
+        await emailTransporter.sendMail({
+          from: process.env.EMAIL_USER,
+          to: user.email,
+          subject: "Password Reset Successful - VisaFlow",
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+              <h2 style="color: #2c3e50; text-align: center;">Password Reset Successful</h2>
+              <div style="background: #d4edda; padding: 20px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #28a745;">
+                <p>Hello ${user.firstName},</p>
+                <p>Your password has been successfully reset for your VisaFlow account.</p>
+                <p>If you didn't make this change, please contact our support team immediately.</p>
+              </div>
+              <div style="text-align: center; color: #666; font-size: 12px;">
+                <p>This is an automated email from VisaFlow. Please do not reply.</p>
+              </div>
+            </div>
+          `
+        })
+        console.log(`📧 Password reset confirmation sent to ${user.email}`)
+      } catch (emailError) {
+        console.error("Error sending confirmation email:", emailError)
+      }
+    }
+
+    res.json({ message: "Password reset successful" })
+  } catch (error) {
+    console.error("Reset password error:", error)
+    res.status(500).json({ error: "Internal server error" })
+  }
+})
+
+// Get Unique Continents
+app.get("/api/continents", async (req, res) => {
+  try {
+    console.log("Fetching unique continents from MongoDB...")
+    
+    // Check if MongoDB is connected
+    if (mongoose.connection.readyState !== 1) {
+      console.error("MongoDB not connected")
+      return res.status(500).json({ error: "Database not connected" })
+    }
+    
+    // Get unique continents from active countries
+    const continents = await Country.distinct('continent', { isActive: true })
+    console.log(`Found ${continents.length} unique continents:`, continents)
+    
+    // Add 'All' option at the beginning
+    const continentsWithAll = ['All', ...continents.filter(c => c).sort()]
+    
+    res.json(continentsWithAll)
+  } catch (error) {
+    console.error("Error fetching continents:", error)
+    res.status(500).json({ 
+      error: "Failed to fetch continents", 
+      details: error.message
+    })
+  }
+})
+
 // Get Countries and Visa Types
 app.get("/api/countries", async (req, res) => {
   try {
@@ -461,6 +655,8 @@ app.get("/api/countries", async (req, res) => {
             code: country.code || '',
             flagEmoji: country.flagEmoji || '',
             flag_emoji: country.flagEmoji || '', // For backward compatibility
+            continent: country.continent || '',
+            region: country.continent || '', // For backward compatibility
             processingTimeMin: country.processingTimeMin || 15,
             processingTimeMax: country.processingTimeMax || 30,
             processing_time_min: country.processingTimeMin || 15, // For backward compatibility
@@ -485,6 +681,8 @@ app.get("/api/countries", async (req, res) => {
             code: country.code || '',
             flagEmoji: country.flagEmoji || '',
             flag_emoji: country.flagEmoji || '',
+            continent: country.continent || '',
+            region: country.continent || '', // For backward compatibility
             processingTimeMin: country.processingTimeMin || 15,
             processingTimeMax: country.processingTimeMax || 30,
             processing_time_min: country.processingTimeMin || 15,
@@ -1065,34 +1263,37 @@ app.post("/api/applications/:id/documents", authenticateToken, upload.array("doc
   }
 })
 
-// Get User Applications
+// Get User Applications with Pagination
 app.get("/api/applications", authenticateToken, async (req, res) => {
   try {
+    const { page = 1, limit = 10 } = req.query
+    const skip = (parseInt(page) - 1) * parseInt(limit)
+    
     let filter = {}
     let applications = []
+    let total = 0
 
     if (req.user.userType === "customer") {
       filter.customerId = req.user.userId
+      total = await VisaApplication.countDocuments(filter)
       applications = await VisaApplication.find(filter)
         .populate('countryId', 'name')
         .populate('visaTypeId', 'name fee')
         .populate('customerId', 'firstName lastName email')
         .populate('assignedTo', 'firstName lastName')
         .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(parseInt(limit))
     } else if (req.user.userType === "employee") {
-      // Get employee profile to check role and permissions
       const employeeProfile = await EmployeeProfile.findOne({ userId: req.user.userId })
       
       if (!employeeProfile) {
         return res.status(403).json({ error: "Employee profile not found" })
       }
 
-      // Filter based on employee role and assignment
       if (employeeProfile.role === "Senior Processor") {
-        // Senior processors can see all applications
         filter = {}
       } else if (employeeProfile.role === "Processor") {
-        // Regular processors see assigned applications and submitted ones
         filter = {
           $or: [
             { assignedTo: req.user.userId },
@@ -1101,27 +1302,30 @@ app.get("/api/applications", authenticateToken, async (req, res) => {
           ]
         }
       } else {
-        // Junior processors only see their assigned applications
         filter = { assignedTo: req.user.userId }
       }
 
+      total = await VisaApplication.countDocuments(filter)
       applications = await VisaApplication.find(filter)
         .populate('countryId', 'name')
         .populate('visaTypeId', 'name fee')
         .populate('customerId', 'firstName lastName email')
         .populate('assignedTo', 'firstName lastName')
         .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(parseInt(limit))
     } else {
-      // Admin sees all applications
+      total = await VisaApplication.countDocuments({})
       applications = await VisaApplication.find({})
         .populate('countryId', 'name')
         .populate('visaTypeId', 'name fee')
         .populate('customerId', 'firstName lastName email')
         .populate('assignedTo', 'firstName lastName')
         .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(parseInt(limit))
     }
 
-    // Format applications for frontend compatibility
     const formattedApplications = applications.map(app => ({
       id: app._id,
       _id: app._id,
@@ -1145,7 +1349,15 @@ app.get("/api/applications", authenticateToken, async (req, res) => {
       updated_at: app.updatedAt
     }))
 
-    res.json(formattedApplications)
+    res.json({
+      data: formattedApplications,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        pages: Math.ceil(total / parseInt(limit))
+      }
+    })
   } catch (error) {
     console.error("Error fetching applications:", error)
     res.status(500).json({ error: "Internal server error" })
@@ -1685,13 +1897,17 @@ app.get("/api/visa-types/:countryId", async (req, res) => {
 
 export default app
 
-// Get all employees (for admin dashboard)
+// Get all employees with pagination
 app.get("/api/employees", authenticateToken, async (req, res) => {
   try {
     if (req.user.userType !== "admin") {
       return res.status(403).json({ error: "Access denied" })
     }
 
+    const { page = 1, limit = 10 } = req.query
+    const skip = (parseInt(page) - 1) * parseInt(limit)
+    
+    const total = await User.countDocuments({ userType: 'employee' })
     const employees = await User.aggregate([
       { $match: { userType: 'employee' } },
       {
@@ -1714,23 +1930,37 @@ app.get("/api/employees", authenticateToken, async (req, res) => {
           employeeId: { $arrayElemAt: ['$profile.employeeId', 0] },
           hireDate: { $arrayElemAt: ['$profile.hireDate', 0] }
         }
-      }
+      },
+      { $skip: skip },
+      { $limit: parseInt(limit) }
     ])
 
-    res.json(employees)
+    res.json({
+      data: employees,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        pages: Math.ceil(total / parseInt(limit))
+      }
+    })
   } catch (error) {
     console.error("Error fetching employees:", error)
     res.status(500).json({ error: "Internal server error" })
   }
 })
 
-// Get all customers (for admin dashboard)
+// Get all customers with pagination
 app.get("/api/customers", authenticateToken, async (req, res) => {
   try {
     if (req.user.userType !== "admin") {
       return res.status(403).json({ error: "Access denied" })
     }
 
+    const { page = 1, limit = 10 } = req.query
+    const skip = (parseInt(page) - 1) * parseInt(limit)
+    
+    const total = await User.countDocuments({ userType: 'customer' })
     const customers = await User.aggregate([
       { $match: { userType: 'customer' } },
       {
@@ -1753,10 +1983,20 @@ app.get("/api/customers", authenticateToken, async (req, res) => {
           country: { $arrayElemAt: ['$profile.country', 0] },
           passportNumber: { $arrayElemAt: ['$profile.passportNumber', 0] }
         }
-      }
+      },
+      { $skip: skip },
+      { $limit: parseInt(limit) }
     ])
 
-    res.json(customers)
+    res.json({
+      data: customers,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        pages: Math.ceil(total / parseInt(limit))
+      }
+    })
   } catch (error) {
     console.error("Error fetching customers:", error)
     res.status(500).json({ error: "Internal server error" })
@@ -1973,7 +2213,7 @@ app.delete("/api/admin/customers/:id", authenticateToken, async (req, res) => {
   }
 })
 
-// Employee Profile Management
+// Profile Management
 app.get("/api/profile", authenticateToken, async (req, res) => {
   try {
     const user = await User.findById(req.user.userId)
@@ -2042,6 +2282,44 @@ app.put("/api/profile", authenticateToken, async (req, res) => {
     res.json({ message: "Profile updated successfully" })
   } catch (error) {
     console.error("Error updating profile:", error)
+    res.status(500).json({ error: "Internal server error" })
+  }
+})
+
+// Change Password
+app.post("/api/change-password", authenticateToken, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: "Current password and new password are required" })
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: "New password must be at least 6 characters long" })
+    }
+
+    // Get user
+    const user = await User.findById(req.user.userId)
+    if (!user) {
+      return res.status(404).json({ error: "User not found" })
+    }
+
+    // Verify current password
+    const isValidPassword = await bcrypt.compare(currentPassword, user.passwordHash)
+    if (!isValidPassword) {
+      return res.status(400).json({ error: "Current password is incorrect" })
+    }
+
+    // Hash new password
+    const newPasswordHash = await bcrypt.hash(newPassword, 10)
+
+    // Update password
+    await User.findByIdAndUpdate(req.user.userId, { passwordHash: newPasswordHash })
+
+    res.json({ message: "Password changed successfully" })
+  } catch (error) {
+    console.error("Error changing password:", error)
     res.status(500).json({ error: "Internal server error" })
   }
 })
@@ -2324,13 +2602,17 @@ app.get("/api/payments/:id", authenticateToken, async (req, res) => {
   }
 })
 
-// Get Payments (Admin/Employee only)
+// Get Payments with pagination
 app.get("/api/payments", authenticateToken, async (req, res) => {
   try {
     if (req.user.userType === "customer") {
       return res.status(403).json({ error: "Access denied" })
     }
 
+    const { page = 1, limit = 10 } = req.query
+    const skip = (parseInt(page) - 1) * parseInt(limit)
+    
+    const total = await PaymentOrder.countDocuments({})
     const payments = await PaymentOrder.find({})
       .populate({
         path: 'applicationId',
@@ -2350,21 +2632,34 @@ app.get("/api/payments", authenticateToken, async (req, res) => {
         ]
       })
       .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit))
 
-    res.json(payments)
+    res.json({
+      data: payments,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        pages: Math.ceil(total / parseInt(limit))
+      }
+    })
   } catch (error) {
     console.error("Error fetching payments:", error)
     res.status(500).json({ error: "Internal server error" })
   }
 })
 
-// Get Customer Payments
+// Get Customer Payments with pagination
 app.get("/api/customer/payments", authenticateToken, async (req, res) => {
   try {
     if (req.user.userType !== "customer") {
       return res.status(403).json({ error: "Access denied" })
     }
 
+    const { page = 1, limit = 10 } = req.query
+    const skip = (parseInt(page) - 1) * parseInt(limit)
+    
     const payments = await PaymentOrder.find({})
       .populate({
         path: 'applicationId',
@@ -2386,10 +2681,19 @@ app.get("/api/customer/payments", authenticateToken, async (req, res) => {
       })
       .sort({ createdAt: -1 })
 
-    // Filter out payments where applicationId is null (no match)
     const customerPayments = payments.filter(payment => payment.applicationId)
+    const total = customerPayments.length
+    const paginatedPayments = customerPayments.slice(skip, skip + parseInt(limit))
 
-    res.json(customerPayments)
+    res.json({
+      data: paginatedPayments,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        pages: Math.ceil(total / parseInt(limit))
+      }
+    })
   } catch (error) {
     console.error("Error fetching customer payments:", error)
     res.status(500).json({ error: "Internal server error" })
@@ -2480,37 +2784,444 @@ app.get("/api/admin/payments", authenticateToken, async (req, res) => {
   }
 })
 
-// Get all payments (for admin dashboard - alternative endpoint)
-app.get("/api/payments", authenticateToken, async (req, res) => {
-  try {
-    if (req.user.userType === "customer") {
-      // For customers, redirect to customer payments
-      return res.redirect('/api/customer/payments')
-    }
 
-    const payments = await PaymentOrder.find({})
-      .populate({
-        path: 'applicationId',
-        populate: [
-          {
-            path: 'customerId',
-            select: 'firstName lastName email'
-          },
-          {
-            path: 'countryId',
-            select: 'name flagEmoji'
-          },
-          {
-            path: 'visaTypeId',
-            select: 'name fee'
-          }
+
+// ===== COMPREHENSIVE LIST ENDPOINTS =====
+
+// List all users with advanced filtering
+app.get("/api/list/users", authenticateToken, (req, res) => {
+  if (req.user.userType !== "admin") {
+    return res.status(403).json({ error: "Access denied" })
+  }
+  listUsers(req, res)
+})
+
+// List all countries with advanced filtering
+app.get("/api/list/countries", authenticateToken, (req, res) => {
+  listCountries(req, res)
+})
+
+// List all visa types with advanced filtering
+app.get("/api/list/visa-types", authenticateToken, (req, res) => {
+  listVisaTypes(req, res)
+})
+
+// List all applications with advanced filtering
+app.get("/api/list/applications", authenticateToken, (req, res) => {
+  // Add user-specific filtering based on role
+  if (req.user.userType === "customer") {
+    req.query.customerId = req.user.userId
+  } else if (req.user.userType === "employee") {
+    // Employee can see assigned applications and submitted ones
+    req.query.employeeFilter = req.user.userId
+  }
+  listApplications(req, res)
+})
+
+// List all payments with advanced filtering
+app.get("/api/list/payments", authenticateToken, (req, res) => {
+  if (req.user.userType === "customer") {
+    req.query.customerId = req.user.userId
+  }
+  listPayments(req, res)
+})
+
+// List all notifications with advanced filtering
+app.get("/api/list/notifications", authenticateToken, (req, res) => {
+  if (req.user.userType === "customer" || req.user.userType === "employee") {
+    req.query.userId = req.user.userId
+  }
+  listNotifications(req, res)
+})
+
+// List application status history
+app.get("/api/list/application-history", authenticateToken, (req, res) => {
+  listApplicationStatusHistory(req, res)
+})
+
+// List application documents
+app.get("/api/list/application-documents", authenticateToken, (req, res) => {
+  listApplicationDocuments(req, res)
+})
+
+// List system settings (Admin only)
+app.get("/api/list/system-settings", authenticateToken, (req, res) => {
+  if (req.user.userType !== "admin") {
+    return res.status(403).json({ error: "Access denied" })
+  }
+  listSystemSettings(req, res)
+})
+
+// Get comprehensive dashboard statistics
+app.get("/api/list/dashboard-stats", authenticateToken, (req, res) => {
+  req.query.userType = req.user.userType
+  req.query.userId = req.user.userId
+  getComprehensiveDashboardStats(req, res)
+})
+
+// ===== ADVANCED SEARCH ENDPOINTS =====
+
+// Global search across all entities
+app.get("/api/search/global", authenticateToken, async (req, res) => {
+  try {
+    const { query: searchQuery, limit = 10 } = req.query
+    
+    if (!searchQuery) {
+      return res.status(400).json({ error: "Search query is required" })
+    }
+    
+    const searchRegex = { $regex: searchQuery, $options: 'i' }
+    const results = {}
+    
+    // Search applications
+    if (req.user.userType === "admin" || req.user.userType === "employee") {
+      results.applications = await VisaApplication.find({
+        $or: [
+          { applicationNumber: searchRegex },
+          { purposeOfVisit: searchRegex }
         ]
       })
-      .sort({ createdAt: -1 })
-
-    res.json(payments)
+      .populate('customerId', 'firstName lastName')
+      .populate('countryId', 'name')
+      .limit(parseInt(limit))
+    }
+    
+    // Search users (admin only)
+    if (req.user.userType === "admin") {
+      results.users = await User.find({
+        $or: [
+          { firstName: searchRegex },
+          { lastName: searchRegex },
+          { email: searchRegex }
+        ]
+      })
+      .select('-passwordHash')
+      .limit(parseInt(limit))
+    }
+    
+    // Search countries
+    results.countries = await Country.find({
+      $or: [
+        { name: searchRegex },
+        { code: searchRegex }
+      ]
+    })
+    .limit(parseInt(limit))
+    
+    // Search visa types
+    results.visaTypes = await VisaType.find({
+      $or: [
+        { name: searchRegex },
+        { description: searchRegex }
+      ]
+    })
+    .populate('countryId', 'name')
+    .limit(parseInt(limit))
+    
+    res.json(results)
   } catch (error) {
-    console.error("Error fetching payments:", error)
+    console.error("Error performing global search:", error)
+    res.status(500).json({ error: "Internal server error" })
+  }
+})
+
+// Search applications with advanced filters
+app.get("/api/search/applications", authenticateToken, async (req, res) => {
+  try {
+    const {
+      query: searchQuery,
+      status,
+      country,
+      visaType,
+      dateFrom,
+      dateTo,
+      limit = 20
+    } = req.query
+    
+    let filter = {}
+    
+    // Apply user-specific filters
+    if (req.user.userType === "customer") {
+      filter.customerId = req.user.userId
+    } else if (req.user.userType === "employee") {
+      filter.$or = [
+        { assignedTo: req.user.userId },
+        { status: "submitted" }
+      ]
+    }
+    
+    // Apply search query
+    if (searchQuery) {
+      const searchRegex = { $regex: searchQuery, $options: 'i' }
+      filter.$and = filter.$and || []
+      filter.$and.push({
+        $or: [
+          { applicationNumber: searchRegex },
+          { purposeOfVisit: searchRegex }
+        ]
+      })
+    }
+    
+    // Apply additional filters
+    if (status) filter.status = status
+    if (country) filter.countryId = country
+    if (visaType) filter.visaTypeId = visaType
+    
+    // Date range filter
+    if (dateFrom || dateTo) {
+      filter.createdAt = {}
+      if (dateFrom) filter.createdAt.$gte = new Date(dateFrom)
+      if (dateTo) filter.createdAt.$lte = new Date(dateTo)
+    }
+    
+    const applications = await VisaApplication.find(filter)
+      .populate('customerId', 'firstName lastName email')
+      .populate('countryId', 'name flagEmoji')
+      .populate('visaTypeId', 'name fee')
+      .populate('assignedTo', 'firstName lastName')
+      .sort({ createdAt: -1 })
+      .limit(parseInt(limit))
+    
+    res.json(applications)
+  } catch (error) {
+    console.error("Error searching applications:", error)
+    res.status(500).json({ error: "Internal server error" })
+  }
+})
+
+// ===== ANALYTICS ENDPOINTS =====
+
+// Get application analytics
+app.get("/api/analytics/applications", authenticateToken, async (req, res) => {
+  try {
+    if (req.user.userType === "customer") {
+      return res.status(403).json({ error: "Access denied" })
+    }
+    
+    const { period = '30d' } = req.query
+    
+    // Calculate date range based on period
+    const now = new Date()
+    let startDate = new Date()
+    
+    switch (period) {
+      case '7d':
+        startDate.setDate(now.getDate() - 7)
+        break
+      case '30d':
+        startDate.setDate(now.getDate() - 30)
+        break
+      case '90d':
+        startDate.setDate(now.getDate() - 90)
+        break
+      case '1y':
+        startDate.setFullYear(now.getFullYear() - 1)
+        break
+      default:
+        startDate.setDate(now.getDate() - 30)
+    }
+    
+    const analytics = await Promise.all([
+      // Status distribution
+      VisaApplication.aggregate([
+        { $match: { createdAt: { $gte: startDate } } },
+        { $group: { _id: '$status', count: { $sum: 1 } } }
+      ]),
+      
+      // Country distribution
+      VisaApplication.aggregate([
+        { $match: { createdAt: { $gte: startDate } } },
+        {
+          $lookup: {
+            from: 'countries',
+            localField: 'countryId',
+            foreignField: '_id',
+            as: 'country'
+          }
+        },
+        { $unwind: '$country' },
+        { $group: { _id: '$country.name', count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+        { $limit: 10 }
+      ]),
+      
+      // Daily application trends
+      VisaApplication.aggregate([
+        { $match: { createdAt: { $gte: startDate } } },
+        {
+          $group: {
+            _id: {
+              year: { $year: '$createdAt' },
+              month: { $month: '$createdAt' },
+              day: { $dayOfMonth: '$createdAt' }
+            },
+            count: { $sum: 1 }
+          }
+        },
+        { $sort: { '_id.year': 1, '_id.month': 1, '_id.day': 1 } }
+      ]),
+      
+      // Processing time analytics
+      VisaApplication.aggregate([
+        {
+          $match: {
+            createdAt: { $gte: startDate },
+            reviewedAt: { $exists: true },
+            submittedAt: { $exists: true }
+          }
+        },
+        {
+          $project: {
+            processingTime: {
+              $divide: [
+                { $subtract: ['$reviewedAt', '$submittedAt'] },
+                1000 * 60 * 60 * 24 // Convert to days
+              ]
+            },
+            status: 1
+          }
+        },
+        {
+          $group: {
+            _id: '$status',
+            avgProcessingTime: { $avg: '$processingTime' },
+            minProcessingTime: { $min: '$processingTime' },
+            maxProcessingTime: { $max: '$processingTime' },
+            count: { $sum: 1 }
+          }
+        }
+      ])
+    ])
+    
+    res.json({
+      period,
+      statusDistribution: analytics[0],
+      countryDistribution: analytics[1],
+      dailyTrends: analytics[2],
+      processingTimeAnalytics: analytics[3]
+    })
+  } catch (error) {
+    console.error("Error getting application analytics:", error)
+    res.status(500).json({ error: "Internal server error" })
+  }
+})
+
+// Get revenue analytics
+app.get("/api/analytics/revenue", authenticateToken, async (req, res) => {
+  try {
+    if (req.user.userType !== "admin") {
+      return res.status(403).json({ error: "Access denied" })
+    }
+    
+    const { period = '30d' } = req.query
+    
+    // Calculate date range
+    const now = new Date()
+    let startDate = new Date()
+    
+    switch (period) {
+      case '7d':
+        startDate.setDate(now.getDate() - 7)
+        break
+      case '30d':
+        startDate.setDate(now.getDate() - 30)
+        break
+      case '90d':
+        startDate.setDate(now.getDate() - 90)
+        break
+      case '1y':
+        startDate.setFullYear(now.getFullYear() - 1)
+        break
+      default:
+        startDate.setDate(now.getDate() - 30)
+    }
+    
+    const revenueAnalytics = await Promise.all([
+      // Total revenue
+      PaymentOrder.aggregate([
+        {
+          $match: {
+            status: 'paid',
+            verifiedAt: { $gte: startDate }
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            totalRevenue: { $sum: '$amount' },
+            totalTransactions: { $sum: 1 }
+          }
+        }
+      ]),
+      
+      // Daily revenue trends
+      PaymentOrder.aggregate([
+        {
+          $match: {
+            status: 'paid',
+            verifiedAt: { $gte: startDate }
+          }
+        },
+        {
+          $group: {
+            _id: {
+              year: { $year: '$verifiedAt' },
+              month: { $month: '$verifiedAt' },
+              day: { $dayOfMonth: '$verifiedAt' }
+            },
+            revenue: { $sum: '$amount' },
+            transactions: { $sum: 1 }
+          }
+        },
+        { $sort: { '_id.year': 1, '_id.month': 1, '_id.day': 1 } }
+      ]),
+      
+      // Revenue by country
+      PaymentOrder.aggregate([
+        {
+          $match: {
+            status: 'paid',
+            verifiedAt: { $gte: startDate }
+          }
+        },
+        {
+          $lookup: {
+            from: 'visaapplications',
+            localField: 'applicationId',
+            foreignField: '_id',
+            as: 'application'
+          }
+        },
+        { $unwind: '$application' },
+        {
+          $lookup: {
+            from: 'countries',
+            localField: 'application.countryId',
+            foreignField: '_id',
+            as: 'country'
+          }
+        },
+        { $unwind: '$country' },
+        {
+          $group: {
+            _id: '$country.name',
+            revenue: { $sum: '$amount' },
+            transactions: { $sum: 1 }
+          }
+        },
+        { $sort: { revenue: -1 } },
+        { $limit: 10 }
+      ])
+    ])
+    
+    res.json({
+      period,
+      totalRevenue: revenueAnalytics[0][0] || { totalRevenue: 0, totalTransactions: 0 },
+      dailyTrends: revenueAnalytics[1],
+      revenueByCountry: revenueAnalytics[2]
+    })
+  } catch (error) {
+    console.error("Error getting revenue analytics:", error)
     res.status(500).json({ error: "Internal server error" })
   }
 })

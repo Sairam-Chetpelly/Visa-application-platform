@@ -46,6 +46,7 @@ const countrySchema = new mongoose.Schema({
   name: { type: String, required: true },
   code: { type: String, required: true },
   flagEmoji: String,
+  continent: { type: String, required: true },
   processingTimeMin: { type: Number, default: 15 },
   processingTimeMax: { type: Number, default: 30 },
   isActive: { type: Boolean, default: true }

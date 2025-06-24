@@ -21,15 +21,13 @@ import { Globe, Users, FileText, TrendingUp, Plus, Edit, Trash2, User, LogOut, B
 import Link from "next/link"
 import { ThemeToggle } from "@/components/ui/theme-toggle"
 import { ErrorBoundary } from "@/components/ErrorBoundary"
+import { usePagination, useClientPagination } from "@/hooks/usePagination"
+import { TablePagination } from "@/components/ui/table-pagination"
 
 export default function AdminDashboard() {
   const router = useRouter()
   const { user, logout, initialized } = useAuth()
   const { toast } = useToast()
-  const [applications, setApplications] = useState<Application[]>([])
-  const [employees, setEmployees] = useState<Employee[]>([])
-  const [customers, setCustomers] = useState<Customer[]>([])
-  const [payments, setPayments] = useState<Payment[]>([])
   const [countries, setCountries] = useState<AdminCountry[]>([])
   const [visaTypes, setVisaTypes] = useState<AdminVisaType[]>([])
   const [settings, setSettings] = useState<SystemSetting[]>([])
@@ -50,9 +48,33 @@ export default function AdminDashboard() {
     name: "",
     code: "",
     flagEmoji: "",
+    continent: "",
     processingTimeMin: 15,
     processingTimeMax: 30
   })
+
+  // Server-side pagination hooks
+  const employeesPagination = usePagination({ 
+    fetchData: (page, limit) => apiClient.getEmployees(page, limit),
+    itemsPerPage: 10 
+  })
+  const customersPagination = usePagination({ 
+    fetchData: (page, limit) => apiClient.getCustomers(page, limit),
+    itemsPerPage: 10 
+  })
+  const applicationsPagination = usePagination({ 
+    fetchData: (page, limit) => apiClient.getApplications(page, limit),
+    itemsPerPage: 10 
+  })
+  const paymentsPagination = usePagination({ 
+    fetchData: (page, limit) => apiClient.getPayments(page, limit),
+    itemsPerPage: 10 
+  })
+  
+  // Client-side pagination for smaller datasets
+  const countriesPagination = useClientPagination({ data: countries, itemsPerPage: 10 })
+  const visaTypesPagination = useClientPagination({ data: visaTypes, itemsPerPage: 10 })
+  const settingsPagination = useClientPagination({ data: settings, itemsPerPage: 10 })
 
   useEffect(() => {
     if (!initialized) {
@@ -83,87 +105,34 @@ export default function AdminDashboard() {
       
       console.log("Fetching admin dashboard data...")
       
-      // Fetch data with individual error handling
       const results = await Promise.allSettled([
-        apiClient.getApplications(),
         apiClient.getDashboardStats(),
-        apiClient.getEmployees(),
-        apiClient.getCustomers(),
-        apiClient.getPayments(),
         apiClient.getAdminCountries(),
         apiClient.getAdminVisaTypes(),
         apiClient.getSystemSettings(),
       ])
       
-      // Handle applications
       if (results[0].status === 'fulfilled') {
-        setApplications(results[0].value || [])
-        console.log("Applications loaded:", results[0].value?.length || 0)
+        setStats(results[0].value || {})
       } else {
-        console.error("Failed to load applications:", results[0].reason)
-        setApplications([])
-      }
-      
-      // Handle stats
-      if (results[1].status === 'fulfilled') {
-        setStats(results[1].value || {})
-        console.log("Stats loaded:", results[1].value)
-      } else {
-        console.error("Failed to load stats:", results[1].reason)
         setStats({})
       }
       
-      // Handle employees
-      if (results[2].status === 'fulfilled') {
-        setEmployees(results[2].value || [])
-        console.log("Employees loaded:", results[2].value?.length || 0)
+      if (results[1].status === 'fulfilled') {
+        setCountries(results[1].value || [])
       } else {
-        console.error("Failed to load employees:", results[2].reason)
-        setEmployees([])
-      }
-      
-      // Handle customers
-      if (results[3].status === 'fulfilled') {
-        setCustomers(results[3].value || [])
-        console.log("Customers loaded:", results[3].value?.length || 0)
-      } else {
-        console.error("Failed to load customers:", results[3].reason)
-        setCustomers([])
-      }
-      
-      // Handle payments
-      if (results[4].status === 'fulfilled') {
-        setPayments(results[4].value || [])
-        console.log("Payments loaded:", results[4].value?.length || 0)
-      } else {
-        console.error("Failed to load payments:", results[4].reason)
-        setPayments([])
-      }
-      
-      // Handle countries
-      if (results[5].status === 'fulfilled') {
-        setCountries(results[5].value || [])
-        console.log("Countries loaded:", results[5].value?.length || 0)
-      } else {
-        console.error("Failed to load countries:", results[5].reason)
         setCountries([])
       }
       
-      // Handle visa types
-      if (results[6].status === 'fulfilled') {
-        setVisaTypes(results[6].value || [])
-        console.log("Visa types loaded:", results[6].value?.length || 0)
+      if (results[2].status === 'fulfilled') {
+        setVisaTypes(results[2].value || [])
       } else {
-        console.error("Failed to load visa types:", results[6].reason)
         setVisaTypes([])
       }
       
-      // Handle settings
-      if (results[7].status === 'fulfilled') {
-        setSettings(results[7].value || [])
-        console.log("Settings loaded:", results[7].value?.length || 0)
+      if (results[3].status === 'fulfilled') {
+        setSettings(results[3].value || [])
       } else {
-        console.error("Failed to load settings:", results[7].reason)
         setSettings([])
       }
       
@@ -194,7 +163,7 @@ export default function AdminDashboard() {
         title: "Employee Created",
         description: "Employee has been created successfully!"
       })
-      await fetchData()
+      employeesPagination.refresh()
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Failed to create employee"
       toast({
@@ -398,8 +367,11 @@ export default function AdminDashboard() {
             <div className="flex items-center space-x-4">
               <MobileSidebar items={sidebarItems} />
               <div className="flex items-center space-x-2">
-                <Globe className="h-8 w-8 text-blue-600" />
-                <h1 className="text-2xl font-bold text-gray-900">VisaFlow - Admin Portal</h1>
+                <div className="bg-blue-600 text-white px-4 py-2 rounded border-2 border-white">
+                  <div className="text-lg font-bold">OPTIONS</div>
+                  <div className="text-xs">Travel Services</div>
+                </div>
+                <span className="text-xl font-bold text-gray-900 ml-2">- Admin Portal</span>
               </div>
             </div>
             <div className="flex items-center space-x-4">
@@ -586,7 +558,7 @@ export default function AdminDashboard() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {employees.map((employee) => (
+                      {employeesPagination.paginatedData.map((employee) => (
                         <TableRow key={employee._id}>
                           <TableCell>{employee.firstName} {employee.lastName}</TableCell>
                           <TableCell>{employee.email}</TableCell>
@@ -696,6 +668,18 @@ export default function AdminDashboard() {
                       ))}
                     </TableBody>
                   </Table>
+                  <TablePagination
+                    currentPage={employeesPagination.currentPage}
+                    totalPages={employeesPagination.totalPages}
+                    pageSize={employeesPagination.pageSize}
+                    totalItems={employeesPagination.totalItems}
+                    startIndex={employeesPagination.startIndex}
+                    endIndex={employeesPagination.endIndex}
+                    onPageChange={employeesPagination.goToPage}
+                    onPageSizeChange={employeesPagination.changePageSize}
+                    hasNextPage={employeesPagination.hasNextPage}
+                    hasPreviousPage={employeesPagination.hasPreviousPage}
+                  />
                 </CardContent>
               </Card>
             </div>
@@ -719,7 +703,7 @@ export default function AdminDashboard() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {customers.map((customer) => (
+                      {customersPagination.paginatedData.map((customer) => (
                         <TableRow key={customer._id}>
                           <TableCell>{customer.firstName} {customer.lastName}</TableCell>
                           <TableCell>{customer.email}</TableCell>
@@ -816,6 +800,18 @@ export default function AdminDashboard() {
                       ))}
                     </TableBody>
                   </Table>
+                  <TablePagination
+                    currentPage={customersPagination.currentPage}
+                    totalPages={customersPagination.totalPages}
+                    pageSize={customersPagination.pageSize}
+                    totalItems={customersPagination.totalItems}
+                    startIndex={customersPagination.startIndex}
+                    endIndex={customersPagination.endIndex}
+                    onPageChange={customersPagination.goToPage}
+                    onPageSizeChange={customersPagination.changePageSize}
+                    hasNextPage={customersPagination.hasNextPage}
+                    hasPreviousPage={customersPagination.hasPreviousPage}
+                  />
                 </CardContent>
               </Card>
             </div>
@@ -839,7 +835,7 @@ export default function AdminDashboard() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {applications.map((app) => (
+                      {applicationsPagination.paginatedData.map((app) => (
                         <TableRow key={app.id}>
                           <TableCell className="font-medium">{app.application_number || app.applicationNumber}</TableCell>
                           <TableCell>
@@ -936,6 +932,18 @@ export default function AdminDashboard() {
                       ))}
                     </TableBody>
                   </Table>
+                  <TablePagination
+                    currentPage={applicationsPagination.currentPage}
+                    totalPages={applicationsPagination.totalPages}
+                    pageSize={applicationsPagination.pageSize}
+                    totalItems={applicationsPagination.totalItems}
+                    startIndex={applicationsPagination.startIndex}
+                    endIndex={applicationsPagination.endIndex}
+                    onPageChange={applicationsPagination.goToPage}
+                    onPageSizeChange={applicationsPagination.changePageSize}
+                    hasNextPage={applicationsPagination.hasNextPage}
+                    hasPreviousPage={applicationsPagination.hasPreviousPage}
+                  />
                 </CardContent>
               </Card>
             </div>
@@ -959,7 +967,7 @@ export default function AdminDashboard() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {payments.map((payment) => (
+                      {paymentsPagination.paginatedData.map((payment) => (
                         <TableRow key={payment._id}>
                           <TableCell className="font-medium">{payment.razorpayOrderId}</TableCell>
                           <TableCell>
@@ -983,6 +991,18 @@ export default function AdminDashboard() {
                       ))}
                     </TableBody>
                   </Table>
+                  <TablePagination
+                    currentPage={paymentsPagination.currentPage}
+                    totalPages={paymentsPagination.totalPages}
+                    pageSize={paymentsPagination.pageSize}
+                    totalItems={paymentsPagination.totalItems}
+                    startIndex={paymentsPagination.startIndex}
+                    endIndex={paymentsPagination.endIndex}
+                    onPageChange={paymentsPagination.goToPage}
+                    onPageSizeChange={paymentsPagination.changePageSize}
+                    hasNextPage={paymentsPagination.hasNextPage}
+                    hasPreviousPage={paymentsPagination.hasPreviousPage}
+                  />
                 </CardContent>
               </Card>
             </div>
@@ -1058,6 +1078,7 @@ export default function AdminDashboard() {
                           name: formData.get('name'),
                           code: formData.get('code'),
                           flagEmoji: formData.get('flagEmoji'),
+                          continent: formData.get('continent'),
                           processingTimeMin: Number(formData.get('processingTimeMin')),
                           processingTimeMax: Number(formData.get('processingTimeMax')),
                           isActive: true
@@ -1079,6 +1100,23 @@ export default function AdminDashboard() {
                       <div>
                         <Label>Flag Emoji</Label>
                         <Input name="flagEmoji" required />
+                      </div>
+                      <div>
+                        <Label>Continent</Label>
+                        <Select name="continent" required>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select continent" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Africa">Africa</SelectItem>
+                            <SelectItem value="Asia">Asia</SelectItem>
+                            <SelectItem value="Europe">Europe</SelectItem>
+                            <SelectItem value="North America">North America</SelectItem>
+                            <SelectItem value="South America">South America</SelectItem>
+                            <SelectItem value="Oceania">Oceania</SelectItem>
+                            <SelectItem value="Antarctica">Antarctica</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div>
@@ -1105,17 +1143,19 @@ export default function AdminDashboard() {
                         <TableHead>Name</TableHead>
                         <TableHead>Code</TableHead>
                         <TableHead>Flag</TableHead>
+                        <TableHead>Continent</TableHead>
                         <TableHead>Processing Time</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead>Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {countries.map((country) => (
+                      {countriesPagination.paginatedData.map((country) => (
                         <TableRow key={country._id}>
                           <TableCell>{country.name}</TableCell>
                           <TableCell>{country.code}</TableCell>
                           <TableCell>{country.flagEmoji}</TableCell>
+                          <TableCell>{country.continent}</TableCell>
                           <TableCell>{country.processingTimeMin}-{country.processingTimeMax} days</TableCell>
                           <TableCell>
                             <Badge className={getStatusColor(country.isActive ? 'active' : 'inactive')}>
@@ -1142,6 +1182,7 @@ export default function AdminDashboard() {
                                         name: formData.get('name'),
                                         code: formData.get('code'),
                                         flagEmoji: formData.get('flagEmoji'),
+                                        continent: formData.get('continent'),
                                         processingTimeMin: Number(formData.get('processingTimeMin')),
                                         processingTimeMax: Number(formData.get('processingTimeMax')),
                                         isActive: formData.get('isActive') === 'true'
@@ -1163,6 +1204,23 @@ export default function AdminDashboard() {
                                     <div>
                                       <Label>Flag Emoji</Label>
                                       <Input name="flagEmoji" defaultValue={country.flagEmoji} required />
+                                    </div>
+                                    <div>
+                                      <Label>Continent</Label>
+                                      <Select name="continent" defaultValue={country.continent} required>
+                                        <SelectTrigger>
+                                          <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="Africa">Africa</SelectItem>
+                                          <SelectItem value="Asia">Asia</SelectItem>
+                                          <SelectItem value="Europe">Europe</SelectItem>
+                                          <SelectItem value="North America">North America</SelectItem>
+                                          <SelectItem value="South America">South America</SelectItem>
+                                          <SelectItem value="Oceania">Oceania</SelectItem>
+                                          <SelectItem value="Antarctica">Antarctica</SelectItem>
+                                        </SelectContent>
+                                      </Select>
                                     </div>
                                     <div className="grid grid-cols-2 gap-4">
                                       <div>
@@ -1206,6 +1264,18 @@ export default function AdminDashboard() {
                       ))}
                     </TableBody>
                   </Table>
+                  <TablePagination
+                    currentPage={countriesPagination.currentPage}
+                    totalPages={countriesPagination.totalPages}
+                    pageSize={countriesPagination.pageSize}
+                    totalItems={countriesPagination.totalItems}
+                    startIndex={countriesPagination.startIndex}
+                    endIndex={countriesPagination.endIndex}
+                    onPageChange={countriesPagination.goToPage}
+                    onPageSizeChange={countriesPagination.changePageSize}
+                    hasNextPage={countriesPagination.hasNextPage}
+                    hasPreviousPage={countriesPagination.hasPreviousPage}
+                  />
                 </CardContent>
               </Card>
             </div>
@@ -1317,7 +1387,7 @@ export default function AdminDashboard() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {visaTypes.map((visaType) => (
+                      {visaTypesPagination.paginatedData.map((visaType) => (
                         <TableRow key={visaType._id}>
                           <TableCell>{visaType.name}</TableCell>
                           <TableCell>
@@ -1423,6 +1493,18 @@ export default function AdminDashboard() {
                       ))}
                     </TableBody>
                   </Table>
+                  <TablePagination
+                    currentPage={visaTypesPagination.currentPage}
+                    totalPages={visaTypesPagination.totalPages}
+                    pageSize={visaTypesPagination.pageSize}
+                    totalItems={visaTypesPagination.totalItems}
+                    startIndex={visaTypesPagination.startIndex}
+                    endIndex={visaTypesPagination.endIndex}
+                    onPageChange={visaTypesPagination.goToPage}
+                    onPageSizeChange={visaTypesPagination.changePageSize}
+                    hasNextPage={visaTypesPagination.hasNextPage}
+                    hasPreviousPage={visaTypesPagination.hasPreviousPage}
+                  />
                 </CardContent>
               </Card>
             </div>
@@ -1490,7 +1572,7 @@ export default function AdminDashboard() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {settings.map((setting) => (
+                      {settingsPagination.paginatedData.map((setting) => (
                         <TableRow key={setting._id}>
                           <TableCell className="font-medium">{setting.key}</TableCell>
                           <TableCell>{setting.value}</TableCell>
@@ -1560,6 +1642,18 @@ export default function AdminDashboard() {
                       ))}
                     </TableBody>
                   </Table>
+                  <TablePagination
+                    currentPage={settingsPagination.currentPage}
+                    totalPages={settingsPagination.totalPages}
+                    pageSize={settingsPagination.pageSize}
+                    totalItems={settingsPagination.totalItems}
+                    startIndex={settingsPagination.startIndex}
+                    endIndex={settingsPagination.endIndex}
+                    onPageChange={settingsPagination.goToPage}
+                    onPageSizeChange={settingsPagination.changePageSize}
+                    hasNextPage={settingsPagination.hasNextPage}
+                    hasPreviousPage={settingsPagination.hasPreviousPage}
+                  />
                 </CardContent>
               </Card>
             </div>

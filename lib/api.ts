@@ -115,14 +115,32 @@ class ApiClient {
     this.clearToken()
   }
 
+  async forgotPassword(email: string) {
+    return this.request("/forgot-password", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    })
+  }
+
+  async resetPassword(token: string, password: string) {
+    return this.request("/reset-password", {
+      method: "POST",
+      body: JSON.stringify({ token, password }),
+    })
+  }
+
   // Countries and visa types
   async getCountries() {
     return this.request("/countries")
   }
 
+  async getContinents() {
+    return this.request("/continents")
+  }
+
   // Applications
-  async getApplications() {
-    return this.request("/applications")
+  async getApplications(page = 1, limit = 10) {
+    return this.request(`/applications?page=${page}&limit=${limit}`)
   }
 
   async getApplication(applicationId: string) {
@@ -226,8 +244,8 @@ class ApiClient {
     })
   }
 
-  async getEmployees() {
-    return this.request("/employees")
+  async getEmployees(page = 1, limit = 10) {
+    return this.request(`/employees?page=${page}&limit=${limit}`)
   }
 
   async updateEmployee(employeeId: string, employeeData: any) {
@@ -244,8 +262,8 @@ class ApiClient {
   }
 
   // Customer management (Admin only)
-  async getCustomers() {
-    return this.request("/customers")
+  async getCustomers(page = 1, limit = 10) {
+    return this.request(`/customers?page=${page}&limit=${limit}`)
   }
 
   async updateCustomer(customerId: string, customerData: any) {
@@ -276,12 +294,12 @@ class ApiClient {
   }
 
   // Payment management
-  async getPayments() {
-    return this.request("/payments")
+  async getPayments(page = 1, limit = 10) {
+    return this.request(`/payments?page=${page}&limit=${limit}`)
   }
 
-  async getCustomerPayments() {
-    return this.request("/customer/payments")
+  async getCustomerPayments(page = 1, limit = 10) {
+    return this.request(`/customer/payments?page=${page}&limit=${limit}`)
   }
 
   async getPayment(paymentId: string) {
@@ -306,6 +324,13 @@ class ApiClient {
     return this.request("/profile", {
       method: "PUT",
       body: JSON.stringify(profileData),
+    })
+  }
+
+  async changePassword(passwordData: { currentPassword: string; newPassword: string }) {
+    return this.request("/change-password", {
+      method: "POST",
+      body: JSON.stringify(passwordData),
     })
   }
 
@@ -381,9 +406,271 @@ class ApiClient {
       method: "DELETE",
     })
   }
+
+  // ===== COMPREHENSIVE LIST ENDPOINTS =====
+
+  // List users with advanced filtering
+  async listUsers(params: {
+    userType?: string
+    status?: string
+    search?: string
+    page?: number
+    limit?: number
+  } = {}) {
+    const queryParams = new URLSearchParams()
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined) queryParams.append(key, value.toString())
+    })
+    return this.request(`/list/users?${queryParams.toString()}`)
+  }
+
+  // List countries with advanced filtering
+  async listCountries(params: {
+    isActive?: boolean
+    search?: string
+    includeVisaTypes?: boolean
+  } = {}) {
+    const queryParams = new URLSearchParams()
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined) queryParams.append(key, value.toString())
+    })
+    return this.request(`/list/countries?${queryParams.toString()}`)
+  }
+
+  // List visa types with advanced filtering
+  async listVisaTypes(params: {
+    countryId?: string
+    isActive?: boolean
+    search?: string
+    page?: number
+    limit?: number
+  } = {}) {
+    const queryParams = new URLSearchParams()
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined) queryParams.append(key, value.toString())
+    })
+    return this.request(`/list/visa-types?${queryParams.toString()}`)
+  }
+
+  // List applications with advanced filtering
+  async listApplications(params: {
+    status?: string | string[]
+    priority?: string
+    countryId?: string
+    visaTypeId?: string
+    customerId?: string
+    assignedTo?: string
+    dateFrom?: string
+    dateTo?: string
+    search?: string
+    page?: number
+    limit?: number
+    sortBy?: string
+    sortOrder?: 'asc' | 'desc'
+  } = {}) {
+    const queryParams = new URLSearchParams()
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined) {
+        if (Array.isArray(value)) {
+          value.forEach(v => queryParams.append(key, v))
+        } else {
+          queryParams.append(key, value.toString())
+        }
+      }
+    })
+    return this.request(`/list/applications?${queryParams.toString()}`)
+  }
+
+  // List payments with advanced filtering
+  async listPayments(params: {
+    status?: string
+    customerId?: string
+    applicationId?: string
+    dateFrom?: string
+    dateTo?: string
+    search?: string
+    page?: number
+    limit?: number
+  } = {}) {
+    const queryParams = new URLSearchParams()
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined) queryParams.append(key, value.toString())
+    })
+    return this.request(`/list/payments?${queryParams.toString()}`)
+  }
+
+  // List notifications with advanced filtering
+  async listNotifications(params: {
+    userId?: string
+    type?: string
+    isRead?: boolean
+    applicationId?: string
+    search?: string
+    page?: number
+    limit?: number
+  } = {}) {
+    const queryParams = new URLSearchParams()
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined) queryParams.append(key, value.toString())
+    })
+    return this.request(`/list/notifications?${queryParams.toString()}`)
+  }
+
+  // List application status history
+  async listApplicationStatusHistory(params: {
+    applicationId?: string
+    changedBy?: string
+    oldStatus?: string
+    newStatus?: string
+    dateFrom?: string
+    dateTo?: string
+    page?: number
+    limit?: number
+  } = {}) {
+    const queryParams = new URLSearchParams()
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined) queryParams.append(key, value.toString())
+    })
+    return this.request(`/list/application-history?${queryParams.toString()}`)
+  }
+
+  // List application documents
+  async listApplicationDocuments(params: {
+    applicationId?: string
+    documentType?: string
+    search?: string
+    page?: number
+    limit?: number
+  } = {}) {
+    const queryParams = new URLSearchParams()
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined) queryParams.append(key, value.toString())
+    })
+    return this.request(`/list/application-documents?${queryParams.toString()}`)
+  }
+
+  // List system settings
+  async listSystemSettings(params: {
+    search?: string
+    page?: number
+    limit?: number
+  } = {}) {
+    const queryParams = new URLSearchParams()
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined) queryParams.append(key, value.toString())
+    })
+    return this.request(`/list/system-settings?${queryParams.toString()}`)
+  }
+
+  // Get comprehensive dashboard statistics
+  async getComprehensiveDashboardStats() {
+    return this.request("/list/dashboard-stats")
+  }
+
+  // ===== SEARCH ENDPOINTS =====
+
+  // Global search across all entities
+  async globalSearch(query: string, limit: number = 10) {
+    return this.request(`/search/global?query=${encodeURIComponent(query)}&limit=${limit}`)
+  }
+
+  // Search applications with advanced filters
+  async searchApplications(params: {
+    query?: string
+    status?: string
+    country?: string
+    visaType?: string
+    dateFrom?: string
+    dateTo?: string
+    limit?: number
+  } = {}) {
+    const queryParams = new URLSearchParams()
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined) queryParams.append(key, value.toString())
+    })
+    return this.request(`/search/applications?${queryParams.toString()}`)
+  }
+
+  // ===== ANALYTICS ENDPOINTS =====
+
+  // Get application analytics
+  async getApplicationAnalytics(period: string = '30d') {
+    return this.request(`/analytics/applications?period=${period}`)
+  }
+
+  // Get revenue analytics
+  async getRevenueAnalytics(period: string = '30d') {
+    return this.request(`/analytics/revenue?period=${period}`)
+  }
+
+  // ===== BULK OPERATIONS =====
+
+  // Bulk update applications
+  async bulkUpdateApplications(applicationIds: string[], updates: any) {
+    return this.request("/applications/bulk-update", {
+      method: "POST",
+      body: JSON.stringify({ applicationIds, updates }),
+    })
+  }
+
+  // Bulk delete applications (Admin only)
+  async bulkDeleteApplications(applicationIds: string[]) {
+    return this.request("/applications/bulk-delete", {
+      method: "POST",
+      body: JSON.stringify({ applicationIds }),
+    })
+  }
+
+  // Bulk assign applications to employee
+  async bulkAssignApplications(applicationIds: string[], employeeId: string) {
+    return this.request("/applications/bulk-assign", {
+      method: "POST",
+      body: JSON.stringify({ applicationIds, employeeId }),
+    })
+  }
+
+  // ===== EXPORT ENDPOINTS =====
+
+  // Export applications to CSV
+  async exportApplicationsCSV(filters: any = {}) {
+    const queryParams = new URLSearchParams()
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value !== undefined) queryParams.append(key, value.toString())
+    })
+    return this.request(`/export/applications/csv?${queryParams.toString()}`)
+  }
+
+  // Export payments to CSV
+  async exportPaymentsCSV(filters: any = {}) {
+    const queryParams = new URLSearchParams()
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value !== undefined) queryParams.append(key, value.toString())
+    })
+    return this.request(`/export/payments/csv?${queryParams.toString()}`)
+  }
+
+  // Export users to CSV (Admin only)
+  async exportUsersCSV(filters: any = {}) {
+    const queryParams = new URLSearchParams()
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value !== undefined) queryParams.append(key, value.toString())
+    })
+    return this.request(`/export/users/csv?${queryParams.toString()}`)
+  }
 }
 
 export const apiClient = new ApiClient(API_BASE_URL)
+
+// Export types for use in components
+export type {
+  ListResponse,
+  SearchResult,
+  ApplicationAnalytics,
+  RevenueAnalytics,
+  NotificationItem,
+  ApplicationStatusHistoryItem,
+  ApplicationDocumentItem
+}
 
 // Types for API responses
 export interface User {
@@ -400,6 +687,8 @@ export interface Country {
   code: string
   flag_emoji?: string
   flagEmoji?: string
+  continent?: string
+  region?: string // For backward compatibility
   processing_time_min?: number
   processing_time_max?: number
   processingTimeMin?: number
@@ -553,6 +842,7 @@ export interface AdminCountry {
   name: string
   code: string
   flagEmoji: string
+  continent: string
   processingTimeMin: number
   processingTimeMax: number
   isActive: boolean
@@ -579,4 +869,80 @@ export interface SystemSetting {
   updatedBy: string
   createdAt: string
   updatedAt: string
+}
+
+// List response interface
+export interface ListResponse<T> {
+  data: T[]
+  pagination?: {
+    page: number
+    limit: number
+    total: number
+    pages: number
+  }
+}
+
+// Search result interface
+export interface SearchResult {
+  applications?: Application[]
+  users?: User[]
+  countries?: Country[]
+  visaTypes?: VisaType[]
+}
+
+// Analytics interfaces
+export interface ApplicationAnalytics {
+  period: string
+  statusDistribution: Array<{ _id: string; count: number }>
+  countryDistribution: Array<{ _id: string; count: number }>
+  dailyTrends: Array<{ _id: { year: number; month: number; day: number }; count: number }>
+  processingTimeAnalytics: Array<{
+    _id: string
+    avgProcessingTime: number
+    minProcessingTime: number
+    maxProcessingTime: number
+    count: number
+  }>
+}
+
+export interface RevenueAnalytics {
+  period: string
+  totalRevenue: { totalRevenue: number; totalTransactions: number }
+  dailyTrends: Array<{ _id: { year: number; month: number; day: number }; revenue: number; transactions: number }>
+  revenueByCountry: Array<{ _id: string; revenue: number; transactions: number }>
+}
+
+// Notification interface
+export interface NotificationItem {
+  _id: string
+  userId: string
+  applicationId?: string
+  type: 'email' | 'sms' | 'system'
+  title: string
+  message: string
+  isRead: boolean
+  createdAt: string
+}
+
+// Application status history interface
+export interface ApplicationStatusHistoryItem {
+  _id: string
+  applicationId: string
+  oldStatus: string
+  newStatus: string
+  changedBy: string
+  comments?: string
+  createdAt: string
+}
+
+// Application document interface
+export interface ApplicationDocumentItem {
+  _id: string
+  applicationId: string
+  documentType: string
+  fileName: string
+  filePath: string
+  fileSize: number
+  mimeType: string
+  createdAt: string
 }
