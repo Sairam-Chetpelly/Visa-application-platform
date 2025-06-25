@@ -21,7 +21,7 @@ import { Globe, Users, FileText, TrendingUp, Plus, Edit, Trash2, User, LogOut, B
 import Link from "next/link"
 import { ThemeToggle } from "@/components/ui/theme-toggle"
 import { ErrorBoundary } from "@/components/ErrorBoundary"
-import { usePagination, useClientPagination } from "@/hooks/usePagination"
+import { usePagination } from "@/hooks/usePagination"
 import { TablePagination } from "@/components/ui/table-pagination"
 
 export default function AdminDashboard() {
@@ -71,10 +71,7 @@ export default function AdminDashboard() {
     itemsPerPage: 10 
   })
   
-  // Client-side pagination for smaller datasets
-  const countriesPagination = useClientPagination({ data: countries, itemsPerPage: 10 })
-  const visaTypesPagination = useClientPagination({ data: visaTypes, itemsPerPage: 10 })
-  const settingsPagination = useClientPagination({ data: settings, itemsPerPage: 10 })
+
 
   useEffect(() => {
     if (!initialized) {
@@ -1150,7 +1147,7 @@ export default function AdminDashboard() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {countriesPagination.paginatedData.map((country) => (
+                      {countries.map((country) => (
                         <TableRow key={country._id}>
                           <TableCell>{country.name}</TableCell>
                           <TableCell>{country.code}</TableCell>
@@ -1264,18 +1261,7 @@ export default function AdminDashboard() {
                       ))}
                     </TableBody>
                   </Table>
-                  <TablePagination
-                    currentPage={countriesPagination.currentPage}
-                    totalPages={countriesPagination.totalPages}
-                    pageSize={countriesPagination.pageSize}
-                    totalItems={countriesPagination.totalItems}
-                    startIndex={countriesPagination.startIndex}
-                    endIndex={countriesPagination.endIndex}
-                    onPageChange={countriesPagination.goToPage}
-                    onPageSizeChange={countriesPagination.changePageSize}
-                    hasNextPage={countriesPagination.hasNextPage}
-                    hasPreviousPage={countriesPagination.hasPreviousPage}
-                  />
+
                 </CardContent>
               </Card>
             </div>
@@ -1387,7 +1373,7 @@ export default function AdminDashboard() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {visaTypesPagination.paginatedData.map((visaType) => (
+                      {visaTypes.map((visaType) => (
                         <TableRow key={visaType._id}>
                           <TableCell>{visaType.name}</TableCell>
                           <TableCell>
@@ -1493,18 +1479,7 @@ export default function AdminDashboard() {
                       ))}
                     </TableBody>
                   </Table>
-                  <TablePagination
-                    currentPage={visaTypesPagination.currentPage}
-                    totalPages={visaTypesPagination.totalPages}
-                    pageSize={visaTypesPagination.pageSize}
-                    totalItems={visaTypesPagination.totalItems}
-                    startIndex={visaTypesPagination.startIndex}
-                    endIndex={visaTypesPagination.endIndex}
-                    onPageChange={visaTypesPagination.goToPage}
-                    onPageSizeChange={visaTypesPagination.changePageSize}
-                    hasNextPage={visaTypesPagination.hasNextPage}
-                    hasPreviousPage={visaTypesPagination.hasPreviousPage}
-                  />
+
                 </CardContent>
               </Card>
             </div>
@@ -1572,7 +1547,7 @@ export default function AdminDashboard() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {settingsPagination.paginatedData.map((setting) => (
+                      {settings.map((setting) => (
                         <TableRow key={setting._id}>
                           <TableCell className="font-medium">{setting.key}</TableCell>
                           <TableCell>{setting.value}</TableCell>
@@ -1642,18 +1617,7 @@ export default function AdminDashboard() {
                       ))}
                     </TableBody>
                   </Table>
-                  <TablePagination
-                    currentPage={settingsPagination.currentPage}
-                    totalPages={settingsPagination.totalPages}
-                    pageSize={settingsPagination.pageSize}
-                    totalItems={settingsPagination.totalItems}
-                    startIndex={settingsPagination.startIndex}
-                    endIndex={settingsPagination.endIndex}
-                    onPageChange={settingsPagination.goToPage}
-                    onPageSizeChange={settingsPagination.changePageSize}
-                    hasNextPage={settingsPagination.hasNextPage}
-                    hasPreviousPage={settingsPagination.hasPreviousPage}
-                  />
+
                 </CardContent>
               </Card>
             </div>

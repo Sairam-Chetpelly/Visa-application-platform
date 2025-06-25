@@ -23,7 +23,7 @@ import { ThemeToggle } from "@/components/ui/theme-toggle"
 export default function ApplicationFormPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { user } = useAuth()
+  const { user, initialized } = useAuth()
   const { toast } = useToast()
   const countryId = searchParams.get("country")
   const applicationId = searchParams.get("id")
@@ -90,6 +90,7 @@ export default function ApplicationFormPage() {
   })
 
   useEffect(() => {
+     if (!initialized) return
     if (!user || user.userType !== "customer") {
       router.push("/login")
       return
@@ -98,7 +99,7 @@ export default function ApplicationFormPage() {
     if (countryId) {
       fetchCountryData()
     }
-  }, [user, countryId, router])
+  }, [user, countryId, router, initialized])
 
   const fetchCountryData = async () => {
     try {

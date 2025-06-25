@@ -13,7 +13,6 @@
     "server:dev": "nodemon scripts/backend-server.js",
     "setup:mongodb": "node scripts/setup-mongodb.js",
     "setup-db": "node scripts/setup-mongodb.js",
-    "setup-db-mysql": "node scripts/setup-database.js",
     "migrate:fresh": "node run-migration.js",
     "db:fresh": "node run-migration.js",
     "migration:fresh": "node run-migration.js",

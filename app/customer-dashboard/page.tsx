@@ -8,12 +8,14 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { AlertWithIcon } from "@/components/ui/alert"
-import { ChevronLeft, User, FileText, CreditCard, Bell, HelpCircle, List, LogOut, Edit, ChevronRight, Upload, X, Clock, CheckCircle, AlertCircle, Plus } from "lucide-react"
+import { ChevronLeft, User, FileText, CreditCard, Bell, HelpCircle, List, LogOut, Edit, ChevronRight, Upload, X, Clock, CheckCircle, AlertCircle, Plus, Menu } from "lucide-react"
 import { useAuth } from "@/hooks/useAuth"
 import { apiClient, type Application, type DashboardStats, type Payment } from "@/lib/api"
 import PaymentCard from "@/components/PaymentCard"
 import { usePagination } from "@/hooks/usePagination"
 import { TablePagination } from "@/components/ui/table-pagination"
+import { toast } from "@/components/ui/use-toast"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
 export default function CustomerDashboard() {
   const router = useRouter()
@@ -26,6 +28,11 @@ export default function CustomerDashboard() {
   const [editForm, setEditForm] = useState({ firstName: '', lastName: '', email: '' })
   const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' })
   const [showPasswordForm, setShowPasswordForm] = useState(false)
+  const [selectedApplication, setSelectedApplication] = useState<Application | null>(null)
+  const [showApplicationModal, setShowApplicationModal] = useState(false)
+  const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null)
+  const [showPaymentModal, setShowPaymentModal] = useState(false)
+  const [showMobileMenu, setShowMobileMenu] = useState(false)
 
   const applicationsPagination = usePagination({ 
     fetchData: (page, limit) => apiClient.getApplications(page, limit),
@@ -87,22 +94,46 @@ export default function CustomerDashboard() {
         lastName: editForm.lastName,
         profileData: {}
       })
+      
+      // Update localStorage with new user data
+      const currentUser = JSON.parse(localStorage.getItem('user') || '{}')
+      const updatedUser = {
+        ...currentUser,
+        firstName: editForm.firstName,
+        lastName: editForm.lastName
+      }
+      localStorage.setItem('user', JSON.stringify(updatedUser))
+      
       setIsEditing(false)
-      alert('Profile updated successfully')
-      // Refresh user data
+      toast({
+        title: "Success",
+        description: "Profile updated successfully"
+      })
       window.location.reload()
     } catch (error: any) {
-      alert(error.message || 'Profile update failed')
+      toast({
+        title: "Error",
+        description: error.message || 'Profile update failed',
+        variant: "destructive"
+      })
     }
   }
 
   const handleChangePassword = async () => {
     if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-      alert('Passwords do not match')
+      toast({
+        title: "Error",
+        description: "Passwords do not match",
+        variant: "destructive"
+      })
       return
     }
     if (passwordForm.newPassword.length < 6) {
-      alert('Password must be at least 6 characters long')
+      toast({
+        title: "Error",
+        description: "Password must be at least 6 characters long",
+        variant: "destructive"
+      })
       return
     }
     try {
@@ -112,9 +143,16 @@ export default function CustomerDashboard() {
       })
       setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' })
       setShowPasswordForm(false)
-      alert('Password changed successfully')
+      toast({
+        title: "Success",
+        description: "Password changed successfully"
+      })
     } catch (error: any) {
-      alert(error.message || 'Password change failed')
+      toast({
+        title: "Error",
+        description: error.message || 'Password change failed',
+        variant: "destructive"
+      })
     }
   }
 
@@ -205,6 +243,48 @@ export default function CustomerDashboard() {
   }
 
   const draftApplications = applicationsPagination.paginatedData.filter(app => app.status === 'draft')
+
+  const handleViewDetails = async (appId: string) => {
+    try {
+      const appDetails = await apiClient.getApplication(appId)
+      setSelectedApplication(appDetails)
+      setShowApplicationModal(true)
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: "Failed to load application details",
+        variant: "destructive"
+      })
+    }
+  }
+
+  const handleViewPayment = (payment: Payment) => {
+    setSelectedPayment(payment)
+    setShowPaymentModal(true)
+  }
+
+  const handleDownloadReceipt = async (paymentId: string) => {
+    try {
+      const receipt = await apiClient.getPaymentReceipt(paymentId)
+      const blob = new Blob([JSON.stringify(receipt, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `receipt-${paymentId}.json`
+      a.click()
+      URL.revokeObjectURL(url)
+      toast({
+        title: "Success",
+        description: "Receipt downloaded successfully"
+      })
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: "Failed to download receipt",
+        variant: "destructive"
+      })
+    }
+  }
 
   const renderContent = () => {
     switch (activeSection) {
@@ -461,74 +541,131 @@ export default function CustomerDashboard() {
               </Link>
             </div>
             
-            {applicationsPagination.paginatedData.length === 0 && !applicationsPagination.loading ? (
-              <Card>
-                <CardContent className="p-8 text-center">
+            <div className="bg-white rounded-lg shadow-sm border">
+              {/* Desktop Table */}
+              <div className="hidden sm:block overflow-x-auto">
+                <table className="w-full min-w-[640px]">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Application</th>
+                      <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Country</th>
+                      <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Visa Type</th>
+                      <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                      <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">Progress</th>
+                      <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden lg:table-cell">Submitted</th>
+                      <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {applicationsPagination.paginatedData.map((app) => (
+                      <tr key={app.id} className="hover:bg-gray-50">
+                        <td className="px-3 sm:px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center">
+                            {getStatusIcon(app.status)}
+                            <div className="ml-2 sm:ml-3">
+                              <p className="text-xs sm:text-sm font-medium text-gray-900">{app.application_number}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900">{app.country_name}</td>
+                        <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900">{app.visa_type_name}</td>
+                        <td className="px-3 sm:px-6 py-4 whitespace-nowrap">
+                          <Badge className={`text-xs ${getStatusColor(app.status)}`}>{formatStatus(app.status)}</Badge>
+                        </td>
+                        <td className="px-3 sm:px-6 py-4 whitespace-nowrap hidden md:table-cell">
+                          <div className="w-full bg-gray-200 rounded-full h-2">
+                            <div 
+                              className="bg-blue-600 h-2 rounded-full" 
+                              style={{ width: `${getProgressValue(app.status)}%` }}
+                            ></div>
+                          </div>
+                          <span className="text-xs text-gray-500">{getProgressValue(app.status)}%</span>
+                        </td>
+                        <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 hidden lg:table-cell">
+                          {app.submitted_at ? new Date(app.submitted_at).toLocaleDateString() : '-'}
+                        </td>
+                        <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-xs sm:text-sm font-medium space-x-1 sm:space-x-2">
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => handleViewDetails(app._id)}
+                            className="text-xs px-2 py-1"
+                          >
+                            View
+                          </Button>
+                          {app.status === "draft" && (
+                            <Link href={`/application-form?id=${app.id}`}>
+                              <Button size="sm" className="text-xs px-2 py-1">Continue</Button>
+                            </Link>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              
+              {/* Mobile Cards */}
+              <div className="sm:hidden space-y-4 p-4">
+                {applicationsPagination.paginatedData.map((app) => (
+                  <div key={app.id} className="border rounded-lg p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center">
+                        {getStatusIcon(app.status)}
+                        <span className="ml-2 text-sm font-medium">{app.application_number}</span>
+                      </div>
+                      <Badge className={`text-xs ${getStatusColor(app.status)}`}>{formatStatus(app.status)}</Badge>
+                    </div>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Country:</span>
+                        <span className="font-medium">{app.country_name}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Visa Type:</span>
+                        <span className="font-medium">{app.visa_type_name}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Progress:</span>
+                        <span className="font-medium">{getProgressValue(app.status)}%</span>
+                      </div>
+                      {app.submitted_at && (
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Submitted:</span>
+                          <span className="font-medium">{new Date(app.submitted_at).toLocaleDateString()}</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex gap-2 pt-2">
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => handleViewDetails(app._id)}
+                        className="flex-1 text-xs"
+                      >
+                        View Details
+                      </Button>
+                      {app.status === "draft" && (
+                        <Link href={`/application-form?id=${app.id}`} className="flex-1">
+                          <Button size="sm" className="w-full text-xs">Continue</Button>
+                        </Link>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {applicationsPagination.paginatedData.length === 0 && (
+                <div className="p-8 text-center">
                   <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                   <h3 className="text-lg font-medium text-gray-900 mb-2">No applications yet</h3>
-                  <p className="text-gray-600 mb-4">Start your visa application process today</p>
-                  <Link href="/new-application">
-                    <Button>
-                      <Plus className="h-4 w-4 mr-2" />
-                      Create Your First Application
-                    </Button>
-                  </Link>
-                </CardContent>
-              </Card>
-            ) : (
-              <>
-                {applicationsPagination.paginatedData.map((app) => (
-                  <Card key={app.id}>
-                    <CardContent className="p-6">
-                      <div className="flex items-center justify-between mb-4">
-                        <div className="flex items-center space-x-3">
-                          {getStatusIcon(app.status)}
-                          <div>
-                            <h4 className="font-semibold text-gray-900">
-                              {app.country_name} - {app.visa_type_name}
-                            </h4>
-                            <p className="text-sm text-gray-600">Application ID: {app.application_number}</p>
-                          </div>
-                        </div>
-                        <Badge className={getStatusColor(app.status)}>{formatStatus(app.status)}</Badge>
-                      </div>
-
-                      <div className="mb-4">
-                        <div className="flex justify-between text-sm text-gray-600 mb-2">
-                          <span>Progress</span>
-                          <span>{getProgressValue(app.status)}%</span>
-                        </div>
-                        <Progress value={getProgressValue(app.status)} className="h-2" />
-                      </div>
-
-                      <div className="flex justify-between items-center text-sm text-gray-600">
-                        <div>
-                          {app.submitted_at && <span>Submitted: {new Date(app.submitted_at).toLocaleDateString()}</span>}
-                        </div>
-                        <div>Last updated: {new Date(app.updated_at).toLocaleDateString()}</div>
-                      </div>
-
-                      <div className="mt-4 flex space-x-2">
-                        <Link href={`/application-details/${app._id}`}>
-                          <Button variant="outline" size="sm">
-                            View Details
-                          </Button>
-                        </Link>
-                        {app.status === "draft" && (
-                          <Link href={`/application-form?id=${app.id}`}>
-                            <Button size="sm">Continue Application</Button>
-                          </Link>
-                        )}
-                        {app.status === "resent" && (
-                          <Link href={`/application-form?id=${app.id}`}>
-                            <Button size="sm">Resubmit</Button>
-                          </Link>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-                {applicationsPagination.paginatedData.length > 0 && (
+                  <p className="text-gray-600">Start your visa application process today</p>
+                </div>
+              )}
+            </div>
+            {applicationsPagination.paginatedData.length > 0 && (
+              <div className="mt-4">
+                {/* Desktop Pagination */}
+                <div className="hidden sm:block">
                   <TablePagination
                     currentPage={applicationsPagination.currentPage}
                     totalPages={applicationsPagination.totalPages}
@@ -541,8 +678,35 @@ export default function CustomerDashboard() {
                     hasNextPage={applicationsPagination.hasNextPage}
                     hasPreviousPage={applicationsPagination.hasPreviousPage}
                   />
-                )}
-              </>
+                </div>
+                
+                {/* Mobile Pagination */}
+                <div className="sm:hidden flex items-center justify-between px-4 py-3 bg-white border-t">
+                  <div className="text-sm text-gray-700">
+                    Page {applicationsPagination.currentPage} of {applicationsPagination.totalPages}
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => applicationsPagination.goToPage(applicationsPagination.currentPage - 1)}
+                      disabled={!applicationsPagination.hasPreviousPage}
+                      className="px-3 py-1 text-xs"
+                    >
+                      Previous
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => applicationsPagination.goToPage(applicationsPagination.currentPage + 1)}
+                      disabled={!applicationsPagination.hasNextPage}
+                      className="px-3 py-1 text-xs"
+                    >
+                      Next
+                    </Button>
+                  </div>
+                </div>
+              </div>
             )}
           </div>
         )
@@ -550,27 +714,144 @@ export default function CustomerDashboard() {
       case 'payment':
         return (
           <div className="space-y-6">
-            <h2 className="text-xl font-semibold">My Payment History</h2>
-            {paymentsPagination.paginatedData.length === 0 && !paymentsPagination.loading ? (
-              <Card>
-                <CardContent className="p-8 text-center">
+            <h2 className="text-xl font-semibold">Payment History</h2>
+            <div className="bg-white rounded-lg shadow-sm border">
+              {/* Desktop Table */}
+              <div className="hidden sm:block overflow-x-auto">
+                <table className="w-full min-w-[640px]">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Receipt</th>
+                      <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Application</th>
+                      <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Country</th>
+                      <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
+                      <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">Status</th>
+                      <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden lg:table-cell">Date</th>
+                      <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {paymentsPagination.paginatedData.map((payment) => (
+                      <tr key={payment._id} className="hover:bg-gray-50">
+                        <td className="px-3 sm:px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center">
+                            <CreditCard className="h-4 w-4 sm:h-5 sm:w-5 text-green-500 mr-1 sm:mr-2" />
+                            <span className="text-xs sm:text-sm font-medium text-gray-900">
+                              {payment.razorpayOrderId?.slice(-8) || 'N/A'}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900">
+                          {payment.applicationId?.applicationNumber || 'N/A'}
+                        </td>
+                        <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900">
+                          <div className="flex items-center">
+                            <span className="mr-1 sm:mr-2">{payment.applicationId?.countryId?.flagEmoji}</span>
+                            <span className="truncate">{payment.applicationId?.countryId?.name}</span>
+                          </div>
+                        </td>
+                        <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-xs sm:text-sm font-medium text-gray-900">
+                          ₹{payment.amount}
+                        </td>
+                        <td className="px-3 sm:px-6 py-4 whitespace-nowrap hidden md:table-cell">
+                          <Badge className={`text-xs ${payment.status === 'paid' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
+                            {payment.status.toUpperCase()}
+                          </Badge>
+                        </td>
+                        <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900 hidden lg:table-cell">
+                          {new Date(payment.verifiedAt || payment.createdAt).toLocaleDateString()}
+                        </td>
+                        <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-xs sm:text-sm font-medium">
+                          <div className="flex gap-1 sm:gap-2">
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => handleViewPayment(payment)}
+                              className="text-xs px-2 py-1"
+                            >
+                              View
+                            </Button>
+                            <Button 
+                              size="sm"
+                              onClick={() => handleDownloadReceipt(payment._id)}
+                              className="text-xs px-2 py-1"
+                            >
+                              Download
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              
+              {/* Mobile Cards */}
+              <div className="sm:hidden space-y-4 p-4">
+                {paymentsPagination.paginatedData.map((payment) => (
+                  <div key={payment._id} className="border rounded-lg p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center">
+                        <CreditCard className="h-5 w-5 text-green-500 mr-2" />
+                        <span className="text-sm font-medium">{payment.razorpayOrderId?.slice(-8) || 'N/A'}</span>
+                      </div>
+                      <Badge className={`text-xs ${payment.status === 'paid' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
+                        {payment.status.toUpperCase()}
+                      </Badge>
+                    </div>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Application:</span>
+                        <span className="font-medium">{payment.applicationId?.applicationNumber || 'N/A'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Country:</span>
+                        <div className="flex items-center">
+                          <span className="mr-1">{payment.applicationId?.countryId?.flagEmoji}</span>
+                          <span className="font-medium">{payment.applicationId?.countryId?.name}</span>
+                        </div>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Amount:</span>
+                        <span className="font-bold text-green-600">₹{payment.amount}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Date:</span>
+                        <span className="font-medium">{new Date(payment.verifiedAt || payment.createdAt).toLocaleDateString()}</span>
+                      </div>
+                    </div>
+                    <div className="flex gap-2 pt-2">
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => handleViewPayment(payment)}
+                        className="flex-1 text-xs"
+                      >
+                        View Receipt
+                      </Button>
+                      <Button 
+                        size="sm"
+                        onClick={() => handleDownloadReceipt(payment._id)}
+                        className="flex-1 text-xs"
+                      >
+                        Download
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {paymentsPagination.paginatedData.length === 0 && (
+                <div className="p-8 text-center">
                   <CreditCard className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                   <h3 className="text-lg font-medium text-gray-900 mb-2">No payments yet</h3>
-                  <p className="text-gray-600 mb-4">Your payment receipts will appear here after successful transactions</p>
-                </CardContent>
-              </Card>
-            ) : (
-              <>
-                {paymentsPagination.paginatedData.map((payment) => (
-                  <PaymentCard
-                    key={payment._id}
-                    payment={payment}
-                    onDownload={() => {
-                      console.log('Payment receipt downloaded:', payment._id)
-                    }}
-                  />
-                ))}
-                {paymentsPagination.paginatedData.length > 0 && (
+                  <p className="text-gray-600">Your payment receipts will appear here after successful transactions</p>
+                </div>
+              )}
+            </div>
+            {paymentsPagination.paginatedData.length > 0 && (
+              <div className="mt-4">
+                {/* Desktop Pagination */}
+                <div className="hidden sm:block">
                   <TablePagination
                     currentPage={paymentsPagination.currentPage}
                     totalPages={paymentsPagination.totalPages}
@@ -583,8 +864,35 @@ export default function CustomerDashboard() {
                     hasNextPage={paymentsPagination.hasNextPage}
                     hasPreviousPage={paymentsPagination.hasPreviousPage}
                   />
-                )}
-              </>
+                </div>
+                
+                {/* Mobile Pagination */}
+                <div className="sm:hidden flex items-center justify-between px-4 py-3 bg-white border-t">
+                  <div className="text-sm text-gray-700">
+                    Page {paymentsPagination.currentPage} of {paymentsPagination.totalPages}
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => paymentsPagination.goToPage(paymentsPagination.currentPage - 1)}
+                      disabled={!paymentsPagination.hasPreviousPage}
+                      className="px-3 py-1 text-xs"
+                    >
+                      Previous
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => paymentsPagination.goToPage(paymentsPagination.currentPage + 1)}
+                      disabled={!paymentsPagination.hasNextPage}
+                      className="px-3 py-1 text-xs"
+                    >
+                      Next
+                    </Button>
+                  </div>
+                </div>
+              </div>
             )}
           </div>
         )
@@ -708,12 +1016,15 @@ export default function CustomerDashboard() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <div className="max-w-md w-full">
-          <AlertWithIcon 
-            variant="destructive" 
-            title="Dashboard Error"
-            description={error}
-            className="mb-4"
-          />
+          <Card>
+            <CardContent className="p-6">
+              <div className="text-center">
+                <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">Dashboard Error</h3>
+                <p className="text-gray-600 mb-4">{error}</p>
+              </div>
+            </CardContent>
+          </Card>
           <Button onClick={fetchData} className="w-full">
             Retry Loading
           </Button>
@@ -724,37 +1035,65 @@ export default function CustomerDashboard() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-white shadow-sm border-b">
+      <header className="sticky top-0 z-50 bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-4">
-            <div className="flex items-center space-x-4">
-              <button className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-400 to-purple-500 text-white rounded-lg hover:from-blue-500 hover:to-purple-600 transition-all">
+            <div className="flex items-center space-x-2 sm:space-x-4">
+              <button className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 bg-gradient-to-r from-blue-400 to-purple-500 text-white rounded-lg hover:from-blue-500 hover:to-purple-600 transition-all text-sm">
                 <ChevronLeft className="w-4 h-4" />
-                Back
+                <span className="hidden sm:inline">Back</span>
               </button>
-              <div className="bg-blue-600 text-white px-4 py-2 rounded border-2 border-blue-600">
-                <div className="text-lg font-bold">OPTIONS</div>
+              <div className="bg-blue-600 text-white px-2 sm:px-4 py-2 rounded border-2 border-blue-600">
+                <div className="text-sm sm:text-lg font-bold">OPTIONS</div>
                 <div className="text-xs">TRAVEL SERVICES</div>
               </div>
             </div>
-            <button className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-400 to-purple-500 text-white rounded-lg hover:from-blue-500 hover:to-purple-600 transition-all">
+            <button className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 bg-gradient-to-r from-blue-400 to-purple-500 text-white rounded-lg hover:from-blue-500 hover:to-purple-600 transition-all text-sm">
               <User className="w-4 h-4" />
-              Profile
+              <span className="hidden sm:inline">Profile</span>
             </button>
           </div>
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex gap-8">
-          <div className="w-80 bg-white rounded-lg shadow-sm border p-6">
-            <h2 className="text-xl font-semibold mb-6">My Profile</h2>
-            <nav className="space-y-2">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
+        {/* Mobile Menu Button */}
+        <button 
+          onClick={() => setShowMobileMenu(!showMobileMenu)}
+          className="lg:hidden mb-4 flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg"
+        >
+          <Menu className="w-4 h-4" />
+          Menu
+        </button>
+
+        <div className="flex flex-col lg:flex-row gap-4 lg:gap-8">
+          {/* Mobile Menu Overlay */}
+          {showMobileMenu && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden" onClick={() => setShowMobileMenu(false)} />
+          )}
+          
+          {/* Sidebar */}
+          <div className={`${
+            showMobileMenu ? 'fixed inset-y-0 left-0 z-50 w-80' : 'hidden'
+          } lg:block lg:relative lg:w-80 bg-white rounded-lg shadow-sm border p-4 sm:p-6`}>
+            <div className="flex justify-between items-center mb-4 sm:mb-6 lg:block">
+              <h2 className="text-lg sm:text-xl font-semibold">My Profile</h2>
+              <button 
+                onClick={() => setShowMobileMenu(false)}
+                className="lg:hidden p-2 hover:bg-gray-100 rounded"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <nav className="space-y-1 sm:space-y-2">
               {menuItems.map((item) => (
                 <button
                   key={item.id}
-                  onClick={() => setActiveSection(item.id)}
-                  className={`w-full flex items-center justify-between p-3 rounded-lg text-left transition-colors ${
+                  onClick={() => {
+                    setActiveSection(item.id)
+                    setShowMobileMenu(false)
+                  }}
+                  className={`w-full flex items-center justify-between p-2 sm:p-3 rounded-lg text-left transition-colors text-sm sm:text-base ${
                     activeSection === item.id
                       ? 'bg-blue-50 text-blue-700 border-l-4 border-blue-600'
                       : 'hover:bg-gray-50 text-gray-700'
@@ -765,10 +1104,10 @@ export default function CustomerDashboard() {
                 </button>
               ))}
             </nav>
-            <div className="mt-8 pt-6 border-t">
+            <div className="mt-6 sm:mt-8 pt-4 sm:pt-6 border-t">
               <button 
                 onClick={handleLogout}
-                className="w-full flex items-center justify-center gap-2 p-3 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors"
+                className="w-full flex items-center justify-center gap-2 p-2 sm:p-3 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors text-sm sm:text-base"
               >
                 <LogOut className="w-4 h-4" />
                 Logout
@@ -776,11 +1115,242 @@ export default function CustomerDashboard() {
             </div>
           </div>
 
-          <div className="flex-1 bg-white rounded-lg shadow-sm border p-8">
+          <div className="flex-1 bg-white rounded-lg shadow-sm border p-4 sm:p-6 lg:p-8">
             {renderContent()}
           </div>
         </div>
       </div>
+
+      {/* Application Details Modal */}
+      <Dialog open={showApplicationModal} onOpenChange={setShowApplicationModal}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Application Details</DialogTitle>
+          </DialogHeader>
+          {selectedApplication && (
+            <div className="space-y-6">
+              {/* Basic Info */}
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium text-gray-600">Application Number</label>
+                  <p className="text-lg font-semibold">{selectedApplication.applicationNumber}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-600">Status</label>
+                  <Badge className={getStatusColor(selectedApplication.status)}>
+                    {formatStatus(selectedApplication.status)}
+                  </Badge>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-600">Country</label>
+                  <p>{selectedApplication.countryId?.name}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-600">Visa Type</label>
+                  <p>{selectedApplication.visaTypeId?.name}</p>
+                </div>
+              </div>
+
+              {/* Travel Info */}
+              <div className="border-t pt-4">
+                <h3 className="font-semibold mb-3">Travel Information</h3>
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium text-gray-600">Purpose of Visit</label>
+                    <p>{selectedApplication.purposeOfVisit || 'Not specified'}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-600">Intended Arrival</label>
+                    <p>{selectedApplication.intendedArrivalDate ? new Date(selectedApplication.intendedArrivalDate).toLocaleDateString() : 'Not specified'}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-600">Intended Departure</label>
+                    <p>{selectedApplication.intendedDepartureDate ? new Date(selectedApplication.intendedDepartureDate).toLocaleDateString() : 'Not specified'}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-600">Accommodation</label>
+                    <p>{selectedApplication.accommodationDetails || 'Not specified'}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Employment Info */}
+              <div className="border-t pt-4">
+                <h3 className="font-semibold mb-3">Employment Information</h3>
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium text-gray-600">Occupation</label>
+                    <p>{selectedApplication.occupation || 'Not specified'}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-600">Employer</label>
+                    <p>{selectedApplication.employer || 'Not specified'}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-600">Monthly Income</label>
+                    <p>{selectedApplication.monthlyIncome ? `₹${selectedApplication.monthlyIncome}` : 'Not specified'}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Dates */}
+              <div className="border-t pt-4">
+                <h3 className="font-semibold mb-3">Application Timeline</h3>
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium text-gray-600">Created At</label>
+                    <p>{new Date(selectedApplication.createdAt).toLocaleString()}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-600">Last Updated</label>
+                    <p>{new Date(selectedApplication.updatedAt).toLocaleString()}</p>
+                  </div>
+                  {selectedApplication.submittedAt && (
+                    <div>
+                      <label className="text-sm font-medium text-gray-600">Submitted At</label>
+                      <p>{new Date(selectedApplication.submittedAt).toLocaleString()}</p>
+                    </div>
+                  )}
+                  {selectedApplication.reviewedAt && (
+                    <div>
+                      <label className="text-sm font-medium text-gray-600">Reviewed At</label>
+                      <p>{new Date(selectedApplication.reviewedAt).toLocaleString()}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Additional Info */}
+              {selectedApplication.additionalInfo && (
+                <div className="border-t pt-4">
+                  <h3 className="font-semibold mb-3">Additional Information</h3>
+                  <p className="text-gray-700">{selectedApplication.additionalInfo}</p>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Payment Details Modal */}
+      <Dialog open={showPaymentModal} onOpenChange={setShowPaymentModal}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Payment Receipt</DialogTitle>
+          </DialogHeader>
+          {selectedPayment && (
+            <div className="bg-white p-6 rounded-lg border" id="payment-receipt">
+              {/* Header */}
+              <div className="text-center mb-6">
+                <h2 className="text-2xl font-bold text-gray-900">Payment Receipt</h2>
+                <div className="bg-green-50 p-3 rounded-lg mt-4">
+                  <div className="flex items-center justify-center">
+                    <CheckCircle className="h-6 w-6 text-green-600 mr-2" />
+                    <span className="text-green-800 font-semibold">Payment Successful</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Receipt Details */}
+              <div className="grid md:grid-cols-2 gap-6 mb-6">
+                <div>
+                  <h3 className="font-semibold text-gray-900 mb-3">Receipt Information</h3>
+                  <div className="space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Receipt Number:</span>
+                      <span className="font-medium">{selectedPayment.razorpayOrderId}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Payment ID:</span>
+                      <span className="font-medium">{selectedPayment.razorpayPaymentId || 'N/A'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Application Number:</span>
+                      <span className="font-medium">{selectedPayment.applicationId?.applicationNumber}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <h3 className="font-semibold text-gray-900 mb-3">Customer Details</h3>
+                  <div className="space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Name:</span>
+                      <span className="font-medium">{user?.firstName} {user?.lastName}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Email:</span>
+                      <span className="font-medium">{user?.email}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Visa Details */}
+              <div className="border-t pt-4 mb-6">
+                <h3 className="font-semibold text-gray-900 mb-3">Visa Details</h3>
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Country:</span>
+                    <div className="flex items-center">
+                      <span className="mr-2">{selectedPayment.applicationId?.countryId?.flagEmoji}</span>
+                      <span className="font-medium">{selectedPayment.applicationId?.countryId?.name}</span>
+                    </div>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Visa Type:</span>
+                    <span className="font-medium">{selectedPayment.applicationId?.visaTypeId?.name}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Payment Summary */}
+              <div className="bg-green-50 p-4 rounded-lg mb-6">
+                <h3 className="font-semibold text-gray-900 mb-3">Payment Information</h3>
+                <div className="space-y-2">
+                  <div className="flex justify-between text-lg">
+                    <span className="text-gray-700">Amount:</span>
+                    <span className="font-bold text-green-600">₹{selectedPayment.amount}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Currency:</span>
+                    <span className="font-medium">{selectedPayment.currency || 'INR'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Status:</span>
+                    <Badge className="bg-green-100 text-green-800">
+                      {selectedPayment.status.toUpperCase()}
+                    </Badge>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Payment Date:</span>
+                    <span className="font-medium">{new Date(selectedPayment.verifiedAt || selectedPayment.createdAt).toLocaleString()}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="text-center text-gray-500 text-sm border-t pt-4">
+                <p>Thank you for using VisaFlow!</p>
+                <p>This is an automated receipt. Please keep it for your records.</p>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex justify-center gap-3 mt-6">
+                <Button 
+                  variant="outline"
+                  onClick={() => window.print()}
+                >
+                  Print Receipt
+                </Button>
+                <Button onClick={() => handleDownloadReceipt(selectedPayment._id)}>
+                  Download Receipt
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
