@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -10,18 +10,18 @@ import { useAuth } from "@/hooks/useAuth"
 import { apiClient, type Country } from "@/lib/api"
 import { ThemeToggle } from "@/components/ui/theme-toggle"
 
-export default function NewApplicationPage() {
+function NewApplicationContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const countryId = searchParams.get('countryId')
-  const { user,initialized } = useAuth()
+  const { user, initialized } = useAuth()
   const [countries, setCountries] = useState<Country[]>([])
   const [selectedCountry, setSelectedCountry] = useState<Country | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-     if (!initialized) return
+    if (!initialized) return
     if (!user) {
       router.push("/login")
       return
@@ -33,7 +33,7 @@ export default function NewApplicationPage() {
     }
 
     fetchCountries()
-  }, [user, router,initialized])
+  }, [user, router, initialized])
 
   const fetchCountries = async () => {
     try {
@@ -233,5 +233,15 @@ export default function NewApplicationPage() {
         )}
       </div>
     </div>
+  )
+}
+
+export default function NewApplicationPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+    </div>}>
+      <NewApplicationContent />
+    </Suspense>
   )
 }
