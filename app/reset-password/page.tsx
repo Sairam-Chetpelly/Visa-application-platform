@@ -1,7 +1,7 @@
 "use client"
 
-import { useState } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { useToast } from "@/hooks/useToast"
 import { apiClient } from "@/lib/api"
 import Link from "next/link"
@@ -11,11 +11,13 @@ import { AlertWithIcon } from "@/components/ui/alert"
 import { ArrowLeft, Lock } from "lucide-react"
 import { motion } from "framer-motion"
 
+// Add dynamic flag to prevent static generation
+export const dynamic = 'force-dynamic'
+
 export default function ResetPasswordPage() {
   const router = useRouter()
-  const searchParams = useSearchParams()
-  const token = searchParams.get('token')
   const { toast } = useToast()
+  const [token, setToken] = useState<string | null>(null)
   const [formData, setFormData] = useState({
     password: "",
     confirmPassword: "",
@@ -23,6 +25,14 @@ export default function ResetPasswordPage() {
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+    // Get token from URL on client side only
+    const params = new URLSearchParams(window.location.search)
+    setToken(params.get('token'))
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -61,6 +71,16 @@ export default function ResetPasswordPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  // Show loading state until client-side code is ready
+  if (!mounted) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center">
+        <div className="w-16 h-16 border-4 border-t-orange-500 border-r-transparent border-b-orange-500 border-l-transparent rounded-full animate-spin"></div>
+        <p className="mt-4 text-gray-600">Loading...</p>
+      </div>
+    )
   }
 
   return (
