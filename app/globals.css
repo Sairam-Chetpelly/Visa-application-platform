@@ -48,40 +48,6 @@ body {
     --sidebar-border: 220 13% 91%;
     --sidebar-ring: 217.2 91.2% 59.8%;
   }
-  .dark {
-    --background: 0 0% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 0 0% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 0 0% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 0 0% 9%;
-    --secondary: 0 0% 14.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 14.9%;
-    --muted-foreground: 0 0% 63.9%;
-    --accent: 0 0% 14.9%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 14.9%;
-    --input: 0 0% 14.9%;
-    --ring: 0 0% 83.1%;
-    --chart-1: 220 70% 50%;
-    --chart-2: 160 60% 45%;
-    --chart-3: 30 80% 55%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
-  }
 }
 
 @layer base {
@@ -90,17 +56,6 @@ body {
   }
   body {
     @apply bg-background text-foreground;
-    transition: background-color 0.3s ease, color 0.3s ease;
-  }
-  
-  /* Ensure smooth transitions for theme changes */
-  html {
-    transition: background-color 0.3s ease;
-  }
-  
-  /* Dark mode improvements */
-  .dark {
-    color-scheme: dark;
   }
   
   /* Custom scrollbar styling */
@@ -122,42 +77,9 @@ body {
     background: hsl(var(--muted-foreground));
   }
   
-  /* Dark mode specific scrollbar */
-  .dark ::-webkit-scrollbar-track {
-    background: hsl(var(--background));
-  }
-  
-  .dark ::-webkit-scrollbar-thumb {
-    background: hsl(var(--border));
-  }
-  
-  .dark ::-webkit-scrollbar-thumb:hover {
-    background: hsl(var(--muted-foreground));
-  }
-  
-  /* Prevent flash of unstyled content */
-  html[data-theme="dark"] {
-    color-scheme: dark;
-  }
-  
-  html[data-theme="light"] {
-    color-scheme: light;
-  }
-  
-  /* Enhanced focus styles for dark mode */
-  .dark *:focus-visible {
-    outline: 2px solid hsl(var(--ring));
-    outline-offset: 2px;
-  }
-  
   /* Better selection colors */
   ::selection {
     background: hsl(var(--primary) / 0.2);
-    color: hsl(var(--primary-foreground));
-  }
-  
-  .dark ::selection {
-    background: hsl(var(--primary) / 0.3);
     color: hsl(var(--primary-foreground));
   }
 }
