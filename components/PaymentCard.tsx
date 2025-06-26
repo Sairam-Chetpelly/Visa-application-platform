@@ -145,7 +145,7 @@ export default function PaymentCard({ payment, onDownload, showDownload = true }
         </head>
         <body>
           <div class="header">
-            <div class="logo">🌍 VisaFlow</div>
+            <div class="logo">🌍 Options Travel Services</div>
             <div class="receipt-title">Payment Receipt</div>
             <div>Receipt #: ${payment.razorpayOrderId}</div>
           </div>
@@ -229,7 +229,7 @@ export default function PaymentCard({ payment, onDownload, showDownload = true }
       <CardContent className="p-6 space-y-6">
         {/* Receipt Header */}
         <div className="text-center pb-4 border-b">
-          <div className="text-2xl font-bold text-blue-600 mb-2">🌍 VisaFlow</div>
+          <div className="text-2xl font-bold text-blue-600 mb-2">🌍 Options Travel Services</div>
           <div className="text-sm text-gray-600">Receipt #{payment.razorpayOrderId}</div>
         </div>
 

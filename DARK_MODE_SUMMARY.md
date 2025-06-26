@@ -95,7 +95,7 @@ All theme colors are defined in `app/globals.css` using CSS custom properties. Y
 
 ## 🎉 Ready to Use!
 
-Your VisaFlow application now has a complete, production-ready dark mode implementation. Users can seamlessly switch between themes, and the system will remember their preference across sessions.
+Your Options Travel Services application now has a complete, production-ready dark mode implementation. Users can seamlessly switch between themes, and the system will remember their preference across sessions.
 
 **Next Steps:**
 1. Run `npm run dev` to start the development server

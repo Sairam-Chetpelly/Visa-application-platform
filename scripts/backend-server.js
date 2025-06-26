@@ -38,6 +38,8 @@ import {
   getDashboardStats as getComprehensiveDashboardStats
 } from "./list-endpoints.js"
 
+import { sendWhatsAppNotification, sendAdminWhatsAppNotification, whatsappTemplates } from "./whatsapp.js"
+
 // Load environment variables
 dotenv.config()
 
@@ -158,41 +160,13 @@ const authenticateToken = (req, res, next) => {
   })
 }
 
+// Import notification service
+import { sendNotification as sendNotificationWithSettings } from './notification-service.js'
+
 // Helper function to send notifications
-const sendNotification = async (userId, type, title, message, applicationId = null) => {
-  try {
-    // Save notification to database
-    await new Notification({
-      userId,
-      applicationId,
-      type,
-      title,
-      message
-    }).save()
-
-    // Get user details
-    const user = await User.findById(userId)
-    if (!user) return
-
-    // Send email notification if configured
-    if ((type === "email" || type === "system") && emailTransporter) {
-      try {
-        await emailTransporter.sendMail({
-          from: process.env.EMAIL_USER,
-          to: user.email,
-          subject: title,
-          html: `<p>${message}</p>`,
-        })
-        console.log(`📧 Email sent to ${user.email}: ${title}`)
-      } catch (emailError) {
-        console.error("Email sending failed:", emailError.message)
-      }
-    } else {
-      console.log(`📝 Notification logged for user ${userId}: ${title}`)
-    }
-  } catch (error) {
-    console.error("Error sending notification:", error)
-  }
+const sendNotification = async (userId, type, title, message, applicationId = null, whatsappMessage = null) => {
+  // Use the enhanced notification service that checks settings
+  await sendNotificationWithSettings(emailTransporter, userId, type, title, message, applicationId, whatsappMessage)
 }
 
 // Helper function to send payment receipt email
@@ -227,14 +201,14 @@ const sendPaymentReceiptEmail = async (paymentData) => {
           <p><strong>Payment Date:</strong> ${new Date(paymentData.paymentDate).toLocaleString()}</p>
         </div>
         <div style="text-align: center; margin: 30px 0; color: #666;">
-          <p>Thank you for using VisaFlow!</p>
+          <p>Thank you for using Options Travel Services!</p>
           <p style="font-size: 12px;">This is an automated receipt. Please keep it for your records.</p>
         </div>
       </div>
     `
     
     await emailTransporter.sendMail({
-      from: process.env.EMAIL_USER,
+      from: `"No-Reply" <${process.env.EMAIL_USER}>`,
       to: paymentData.customerEmail,
       subject: `Payment Receipt - ${paymentData.applicationNumber}`,
       html: receiptHtml
@@ -282,7 +256,7 @@ const sendNewApplicationNotificationToAdmin = async (applicationData) => {
         </div>
         <div style="text-align: center; margin: 30px 0;">
           <p style="color: #666;">Please review and assign this application to an appropriate processor.</p>
-          <p style="font-size: 12px; color: #999;">This is an automated notification from VisaFlow Admin System.</p>
+          <p style="font-size: 12px; color: #999;">This is an automated notification from Options Travel Services Admin System.</p>
         </div>
       </div>
     `
@@ -290,7 +264,7 @@ const sendNewApplicationNotificationToAdmin = async (applicationData) => {
     // Send email to all admin users
     for (const admin of adminUsers) {
       await emailTransporter.sendMail({
-        from: process.env.EMAIL_USER,
+        from: `"No-Reply" <${process.env.EMAIL_USER}>`,
         to: admin.email,
         subject: `New Application: ${applicationData.applicationNumber} - ${applicationData.country}`,
         html: notificationHtml
@@ -375,8 +349,10 @@ app.post("/api/register", async (req, res) => {
     await sendNotification(
       user._id,
       "email",
-      "Welcome to VisaFlow",
+      "Welcome to Options Travel Services",
       "Your account has been created successfully. You can now start your visa application process.",
+      null,
+      whatsappTemplates.welcome(`${firstName} ${lastName}`)
     )
 
     res.status(201).json({ message: "User registered successfully", userId: user._id })
@@ -473,15 +449,15 @@ app.post("/api/forgot-password", async (req, res) => {
     if (emailTransporter) {
       try {
         await emailTransporter.sendMail({
-          from: process.env.EMAIL_USER,
+          from: `"No-Reply" <${process.env.EMAIL_USER}>`,
           to: user.email,
-          subject: "Password Reset Request - VisaFlow",
+          subject: "Password Reset Request - Options Travel Services",
           html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
               <h2 style="color: #2c3e50; text-align: center;">Password Reset Request</h2>
               <div style="background: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0;">
                 <p>Hello ${user.firstName},</p>
-                <p>We received a request to reset your password for your VisaFlow account.</p>
+                <p>We received a request to reset your password for your Options Travel Services account.</p>
                 <p>Click the button below to reset your password:</p>
                 <div style="text-align: center; margin: 30px 0;">
                   <a href="${resetUrl}" style="background: #007bff; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block;">Reset Password</a>
@@ -492,7 +468,7 @@ app.post("/api/forgot-password", async (req, res) => {
                 <p>If you didn't request this password reset, please ignore this email.</p>
               </div>
               <div style="text-align: center; color: #666; font-size: 12px;">
-                <p>This is an automated email from VisaFlow. Please do not reply.</p>
+                <p>This is an automated email from Options Travel Services. Please do not reply.</p>
               </div>
             </div>
           `
@@ -564,19 +540,19 @@ app.post("/api/reset-password", async (req, res) => {
     if (emailTransporter) {
       try {
         await emailTransporter.sendMail({
-          from: process.env.EMAIL_USER,
+          from: `"No-Reply" <${process.env.EMAIL_USER}>`,
           to: user.email,
-          subject: "Password Reset Successful - VisaFlow",
+          subject: "Password Reset Successful - Options Travel Services",
           html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
               <h2 style="color: #2c3e50; text-align: center;">Password Reset Successful</h2>
               <div style="background: #d4edda; padding: 20px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #28a745;">
                 <p>Hello ${user.firstName},</p>
-                <p>Your password has been successfully reset for your VisaFlow account.</p>
+                <p>Your password has been successfully reset for your Options Travel Services account.</p>
                 <p>If you didn't make this change, please contact our support team immediately.</p>
               </div>
               <div style="text-align: center; color: #666; font-size: 12px;">
-                <p>This is an automated email from VisaFlow. Please do not reply.</p>
+                <p>This is an automated email from Options Travel Services. Please do not reply.</p>
               </div>
             </div>
           `
@@ -785,6 +761,17 @@ app.post("/api/applications", authenticateToken, async (req, res) => {
         { upsert: true }
       )
     }
+
+    // Send application created notification
+    const countryData = await Country.findById(countryId)
+    await sendNotification(
+      req.user.userId,
+      "system",
+      "Application Created",
+      `Your visa application ${applicationNumber} has been created successfully.`,
+      application._id,
+      whatsappTemplates.applicationCreated(`${req.user.firstName} ${req.user.lastName}`, applicationNumber, countryData?.name || 'Unknown')
+    )
 
     res.status(201).json({
       message: "Application created successfully",
@@ -1103,13 +1090,24 @@ app.post("/api/applications/:id/verify-payment", authenticateToken, async (req, 
       paymentStatus: 'Paid'
     })
 
-    // Notify customer
+    // Send WhatsApp notification to admin
+    await sendAdminWhatsAppNotification(
+      whatsappTemplates.adminNewApplication(
+        `${appDetails.customerId.firstName} ${appDetails.customerId.lastName}`,
+        appDetails.applicationNumber,
+        appDetails.countryId.name
+      )
+    )
+
+    // Notify customer with WhatsApp
+    const appData = await VisaApplication.findById(applicationId).populate('countryId', 'name')
     await sendNotification(
       req.user.userId,
       "email",
       "Application Submitted Successfully",
       "Your visa application has been submitted successfully and payment has been processed. You will receive updates on the application status.",
       applicationId,
+      whatsappTemplates.applicationSubmitted(`${req.user.firstName} ${req.user.lastName}`, appData.applicationNumber, appData.countryId?.name || 'Unknown')
     )
 
     res.json({ message: "Payment verified and application submitted successfully" })
@@ -1468,7 +1466,7 @@ app.post("/api/applications/:id/status", authenticateToken, async (req, res) => 
       comments
     }).save()
 
-    // Send notification to customer
+    // Send notification to customer with WhatsApp
     const statusMessages = {
       approved: "Your visa application has been approved! Please check your email for further instructions.",
       rejected: `Your visa application has been rejected. Reason: ${comments}`,
@@ -1477,7 +1475,26 @@ app.post("/api/applications/:id/status", authenticateToken, async (req, res) => 
     }
 
     if (statusMessages[status]) {
-      await sendNotification(customerId, "email", "Application Status Update", statusMessages[status], applicationId)
+      const customer = await User.findById(customerId)
+      const appWithDetails = await VisaApplication.findById(applicationId).populate('countryId', 'name')
+      
+      let whatsappMsg = null
+      if (status === 'approved') {
+        whatsappMsg = whatsappTemplates.applicationApproved(
+          `${customer.firstName} ${customer.lastName}`,
+          appWithDetails.applicationNumber,
+          appWithDetails.countryId?.name || 'Unknown'
+        )
+      } else if (status === 'rejected' || status === 'resent') {
+        whatsappMsg = whatsappTemplates.applicationRejected(
+          `${customer.firstName} ${customer.lastName}`,
+          appWithDetails.applicationNumber,
+          appWithDetails.countryId?.name || 'Unknown',
+          comments || 'Please check your dashboard for details'
+        )
+      }
+      
+      await sendNotification(customerId, "email", "Application Status Update", statusMessages[status], applicationId, whatsappMsg)
     }
 
     res.json({ message: "Application status updated successfully" })
@@ -1527,12 +1544,22 @@ app.post("/api/employees", authenticateToken, async (req, res) => {
       createdBy: req.user.userId
     }).save()
 
-    // Send welcome email
+    // Send welcome email with WhatsApp
     await sendNotification(
       user._id,
       "email",
-      "Welcome to VisaFlow Team",
+      "Welcome to Options Travel Services Team",
       `Your employee account has been created. Your login credentials are: Email: ${email}, Password: ${password}. Please change your password after first login.`,
+      null,
+      `🎉 Welcome to Options Travel Services Team!
+
+Hi ${firstName} ${lastName},
+Your employee account has been created successfully.
+
+Role: ${role}
+Employee ID: ${employeeId}
+
+Please check your email for login credentials.`
     )
 
     res.status(201).json({ message: "Employee created successfully", employeeId: user._id })
@@ -1644,6 +1671,10 @@ app.get("/api/admin/employees", authenticateToken, async (req, res) => {
       return res.status(403).json({ error: "Access denied" })
     }
 
+    const { page = 1, limit = 10 } = req.query
+    const skip = (parseInt(page) - 1) * parseInt(limit)
+    
+    const total = await User.countDocuments({ userType: 'employee' })
     const employees = await User.aggregate([
       { $match: { userType: 'employee' } },
       {
@@ -1666,10 +1697,20 @@ app.get("/api/admin/employees", authenticateToken, async (req, res) => {
           employeeId: { $arrayElemAt: ['$profile.employeeId', 0] },
           hireDate: { $arrayElemAt: ['$profile.hireDate', 0] }
         }
-      }
+      },
+      { $skip: skip },
+      { $limit: parseInt(limit) }
     ])
 
-    res.json(employees)
+    res.json({
+      data: employees,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        pages: Math.ceil(total / parseInt(limit))
+      }
+    })
   } catch (error) {
     console.error("Error fetching employees:", error)
     res.status(500).json({ error: "Internal server error" })
@@ -1746,8 +1787,25 @@ app.get("/api/admin/countries", authenticateToken, async (req, res) => {
     if (req.user.userType !== "admin") {
       return res.status(403).json({ error: "Access denied" })
     }
-    const countries = await Country.find().sort({ name: 1 })
-    res.json(countries)
+    
+    const { page = 1, limit = 10 } = req.query
+    const skip = (parseInt(page) - 1) * parseInt(limit)
+    
+    const total = await Country.countDocuments({})
+    const countries = await Country.find({})
+      .sort({ name: 1 })
+      .skip(skip)
+      .limit(parseInt(limit))
+    
+    res.json({
+      data: countries,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        pages: Math.ceil(total / parseInt(limit))
+      }
+    })
   } catch (error) {
     res.status(500).json({ error: "Internal server error" })
   }
@@ -1796,8 +1854,26 @@ app.get("/api/admin/visa-types", authenticateToken, async (req, res) => {
     if (req.user.userType !== "admin") {
       return res.status(403).json({ error: "Access denied" })
     }
-    const visaTypes = await VisaType.find().populate('countryId', 'name').sort({ name: 1 })
-    res.json(visaTypes)
+    
+    const { page = 1, limit = 10 } = req.query
+    const skip = (parseInt(page) - 1) * parseInt(limit)
+    
+    const total = await VisaType.countDocuments({})
+    const visaTypes = await VisaType.find({})
+      .populate('countryId', 'name')
+      .sort({ name: 1 })
+      .skip(skip)
+      .limit(parseInt(limit))
+    
+    res.json({
+      data: visaTypes,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        pages: Math.ceil(total / parseInt(limit))
+      }
+    })
   } catch (error) {
     res.status(500).json({ error: "Internal server error" })
   }
@@ -1846,9 +1922,54 @@ app.get("/api/admin/settings", authenticateToken, async (req, res) => {
     if (req.user.userType !== "admin") {
       return res.status(403).json({ error: "Access denied" })
     }
-    const settings = await SystemSettings.find()
-    res.json(settings)
+    
+    const { page = 1, limit = 10 } = req.query
+    const skip = (parseInt(page) - 1) * parseInt(limit)
+    
+    const total = await SystemSettings.countDocuments({})
+    const settings = await SystemSettings.find({})
+      .sort({ key: 1 })
+      .skip(skip)
+      .limit(parseInt(limit))
+    
+    res.json({
+      data: settings,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        pages: Math.ceil(total / parseInt(limit))
+      }
+    })
   } catch (error) {
+    res.status(500).json({ error: "Internal server error" })
+  }
+})
+
+// Get notification settings status (Admin only)
+app.get("/api/admin/notification-settings", authenticateToken, async (req, res) => {
+  try {
+    if (req.user.userType !== "admin") {
+      return res.status(403).json({ error: "Access denied" })
+    }
+    
+    // Import the notification service function
+    const { isNotificationChannelEnabled } = await import('./notification-service.js')
+    
+    // Check status of each notification channel
+    const [emailEnabled, smsEnabled, whatsappEnabled] = await Promise.all([
+      isNotificationChannelEnabled('email'),
+      isNotificationChannelEnabled('sms'),
+      isNotificationChannelEnabled('whatsapp')
+    ])
+    
+    res.json({
+      email: emailEnabled,
+      sms: smsEnabled,
+      whatsapp: whatsappEnabled
+    })
+  } catch (error) {
+    console.error("Error fetching notification settings:", error)
     res.status(500).json({ error: "Internal server error" })
   }
 })
@@ -2137,6 +2258,10 @@ app.get("/api/admin/customers", authenticateToken, async (req, res) => {
       return res.status(403).json({ error: "Access denied" })
     }
 
+    const { page = 1, limit = 10 } = req.query
+    const skip = (parseInt(page) - 1) * parseInt(limit)
+    
+    const total = await User.countDocuments({ userType: 'customer' })
     const customers = await User.aggregate([
       { $match: { userType: 'customer' } },
       {
@@ -2159,10 +2284,20 @@ app.get("/api/admin/customers", authenticateToken, async (req, res) => {
           country: { $arrayElemAt: ['$profile.country', 0] },
           passportNumber: { $arrayElemAt: ['$profile.passportNumber', 0] }
         }
-      }
+      },
+      { $skip: skip },
+      { $limit: parseInt(limit) }
     ])
 
-    res.json(customers)
+    res.json({
+      data: customers,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        pages: Math.ceil(total / parseInt(limit))
+      }
+    })
   } catch (error) {
     console.error("Error fetching customers:", error)
     res.status(500).json({ error: "Internal server error" })

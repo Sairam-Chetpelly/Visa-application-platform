@@ -17,9 +17,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Sidebar, MobileSidebar } from "@/components/ui/sidebar"
 import { AlertWithIcon } from "@/components/ui/alert"
-import { Globe, Users, FileText, TrendingUp, Plus, Edit, Trash2, User, LogOut, BarChart3, CreditCard, DollarSign, UserCheck, Eye, Settings, MapPin } from "lucide-react"
+import { Globe, Users, FileText, TrendingUp, Plus, Edit, Trash2, User, LogOut, BarChart3, CreditCard, DollarSign, UserCheck, Eye, Settings, MapPin, ChevronLeft, ChevronRight, Menu, X, CheckCircle } from "lucide-react"
 import Link from "next/link"
-import { ThemeToggle } from "@/components/ui/theme-toggle"
+
+
 import { ErrorBoundary } from "@/components/ErrorBoundary"
 import { usePagination } from "@/hooks/usePagination"
 import { TablePagination } from "@/components/ui/table-pagination"
@@ -31,12 +32,24 @@ export default function AdminDashboard() {
   const [countries, setCountries] = useState<AdminCountry[]>([])
   const [visaTypes, setVisaTypes] = useState<AdminVisaType[]>([])
   const [settings, setSettings] = useState<SystemSetting[]>([])
+  const [notificationSettings, setNotificationSettings] = useState({
+    email: true,
+    sms: true,
+    whatsapp: true
+  })
   const [stats, setStats] = useState<DashboardStats>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState("overview")
+  const [showMobileMenu, setShowMobileMenu] = useState(false)
+  const [scrolled, setScrolled] = useState(false)
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null)
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null)
+  const [employeeDialogOpen, setEmployeeDialogOpen] = useState(false)
+  const [isEditing, setIsEditing] = useState(false)
+  const [editForm, setEditForm] = useState({ firstName: '', lastName: '', email: '' })
+  const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' })
+  const [showPasswordForm, setShowPasswordForm] = useState(false)
   const [newEmployee, setNewEmployee] = useState({
     firstName: "",
     lastName: "",
@@ -53,6 +66,69 @@ export default function AdminDashboard() {
     processingTimeMax: 30
   })
 
+  const handleAddCountry = async (e: React.FormEvent) => {
+    e.preventDefault()
+    try {
+      await apiClient.createCountry(newCountry)
+      setNewCountry({ name: "", code: "", flagEmoji: "", continent: "", processingTimeMin: 15, processingTimeMax: 30 })
+      await countriesPagination.refresh()
+      toast({
+        variant: "success",
+        title: "Country Added",
+        description: "Country has been added successfully!"
+      })
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Failed to add country"
+      toast({
+        variant: "destructive",
+        title: "Addition Failed",
+        description: errorMessage
+      })
+    }
+  }
+
+  const handleDeleteCountry = async (countryId: string) => {
+    if (confirm("Are you sure you want to delete this country?")) {
+      try {
+        await apiClient.deleteCountry(countryId)
+        await countriesPagination.refresh()
+        toast({
+          variant: "success",
+          title: "Country Deleted",
+          description: "Country has been deleted successfully!"
+        })
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : "Failed to delete country"
+        toast({
+          variant: "destructive",
+          title: "Deletion Failed",
+          description: errorMessage
+        })
+      }
+    }
+  }
+
+  const handleDeleteVisaType = async (visaTypeId: string) => {
+    if (confirm("Are you sure you want to delete this visa type?")) {
+      try {
+        await apiClient.deleteVisaType(visaTypeId)
+        await visaTypesPagination.refresh()
+        toast({
+          variant: "success",
+          title: "Visa Type Deleted",
+          description: "Visa type has been deleted successfully!"
+        })
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : "Failed to delete visa type"
+        toast({
+          variant: "destructive",
+          title: "Deletion Failed",
+          description: errorMessage
+        })
+      }
+    }
+  }
+
   // Server-side pagination hooks
   const employeesPagination = usePagination({ 
     fetchData: (page, limit) => apiClient.getEmployees(page, limit),
@@ -68,6 +144,18 @@ export default function AdminDashboard() {
   })
   const paymentsPagination = usePagination({ 
     fetchData: (page, limit) => apiClient.getPayments(page, limit),
+    itemsPerPage: 10 
+  })
+  const countriesPagination = usePagination({ 
+    fetchData: (page, limit) => apiClient.getAdminCountries(page, limit),
+    itemsPerPage: 10 
+  })
+  const visaTypesPagination = usePagination({ 
+    fetchData: (page, limit) => apiClient.getAdminVisaTypes(page, limit),
+    itemsPerPage: 10 
+  })
+  const settingsPagination = usePagination({ 
+    fetchData: (page, limit) => apiClient.getSystemSettings(page, limit),
     itemsPerPage: 10 
   })
   
@@ -93,7 +181,62 @@ export default function AdminDashboard() {
 
     console.log("Admin user authenticated, fetching data...")
     fetchData()
+    if (user) {
+      setEditForm({ firstName: user.firstName || '', lastName: user.lastName || '', email: user.email || '' })
+    }
   }, [user, router, initialized])
+  
+  // Load notification settings when settings tab is active
+  useEffect(() => {
+    if (activeTab === "settings") {
+      const loadNotificationSettings = async () => {
+        try {
+          const settings = await apiClient.getNotificationSettings()
+          if (settings) {
+            setNotificationSettings({
+              email: settings.email,
+              sms: settings.sms,
+              whatsapp: settings.whatsapp
+            })
+          }
+        } catch (error) {
+          console.error("Failed to load notification settings:", error)
+          // Set defaults if API call fails
+          setNotificationSettings({
+            email: true,
+            sms: true,
+            whatsapp: true
+          })
+        }
+      }
+      
+      loadNotificationSettings()
+    }
+    
+    // Load countries data when visa-types tab is active
+    if (activeTab === "visa-types") {
+      const loadCountries = async () => {
+        try {
+          const countriesData = await apiClient.getAdminCountries(1, 100)
+          if (countriesData && countriesData.data) {
+            setCountries(countriesData.data)
+          }
+        } catch (error) {
+          console.error("Failed to load countries:", error)
+        }
+      }
+      
+      loadCountries()
+    }
+  }, [activeTab])
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setScrolled(window.scrollY > 10)
+    }
+    window.addEventListener('scroll', handleScroll)
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [])
 
   const fetchData = async () => {
     try {
@@ -103,10 +246,7 @@ export default function AdminDashboard() {
       console.log("Fetching admin dashboard data...")
       
       const results = await Promise.allSettled([
-        apiClient.getDashboardStats(),
-        apiClient.getAdminCountries(),
-        apiClient.getAdminVisaTypes(),
-        apiClient.getSystemSettings(),
+        apiClient.getDashboardStats()
       ])
       
       if (results[0].status === 'fulfilled') {
@@ -115,23 +255,12 @@ export default function AdminDashboard() {
         setStats({})
       }
       
-      if (results[1].status === 'fulfilled') {
-        setCountries(results[1].value || [])
-      } else {
-        setCountries([])
-      }
-      
-      if (results[2].status === 'fulfilled') {
-        setVisaTypes(results[2].value || [])
-      } else {
-        setVisaTypes([])
-      }
-      
-      if (results[3].status === 'fulfilled') {
-        setSettings(results[3].value || [])
-      } else {
-        setSettings([])
-      }
+      // Refresh pagination data
+      await Promise.all([
+        countriesPagination.refresh(),
+        visaTypesPagination.refresh(),
+        settingsPagination.refresh()
+      ])
       
       // Check if any critical errors occurred
       const failedRequests = results.filter(result => result.status === 'rejected')
@@ -160,7 +289,7 @@ export default function AdminDashboard() {
         title: "Employee Created",
         description: "Employee has been created successfully!"
       })
-      employeesPagination.refresh()
+      await employeesPagination.refresh()
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Failed to create employee"
       toast({
@@ -176,11 +305,86 @@ export default function AdminDashboard() {
     router.push("/")
   }
 
+  const handleEditProfile = async () => {
+    try {
+      await apiClient.updateProfile({
+        firstName: editForm.firstName,
+        lastName: editForm.lastName,
+        profileData: {}
+      })
+      
+      // Update localStorage with new user data
+      const currentUser = JSON.parse(localStorage.getItem('user') || '{}')
+      const updatedUser = {
+        ...currentUser,
+        firstName: editForm.firstName,
+        lastName: editForm.lastName
+      }
+      localStorage.setItem('user', JSON.stringify(updatedUser))
+      
+      // Update user state in auth context
+      if (user) {
+        // Force update the user object in memory
+        user.firstName = editForm.firstName
+        user.lastName = editForm.lastName
+      }
+      
+      setIsEditing(false)
+      toast({
+        title: "Success",
+        description: "Profile updated successfully"
+      })
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || 'Profile update failed',
+        variant: "destructive"
+      })
+    }
+  }
+
+  const handleChangePassword = async () => {
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      toast({
+        title: "Error",
+        description: "Passwords do not match",
+        variant: "destructive"
+      })
+      return
+    }
+    if (passwordForm.newPassword.length < 6) {
+      toast({
+        title: "Error",
+        description: "Password must be at least 6 characters long",
+        variant: "destructive"
+      })
+      return
+    }
+    try {
+      await apiClient.changePassword({
+        currentPassword: passwordForm.currentPassword,
+        newPassword: passwordForm.newPassword
+      })
+      setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' })
+      setShowPasswordForm(false)
+      toast({
+        title: "Success",
+        description: "Password changed successfully"
+      })
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || 'Password change failed',
+        variant: "destructive"
+      })
+    }
+  }
+
   const handleDeleteEmployee = async (employeeId: string) => {
     if (confirm("Are you sure you want to delete this employee?")) {
       try {
         await apiClient.deleteEmployee(employeeId)
-        await fetchData()
+        await employeesPagination.refresh()
         toast({
           variant: "success",
           title: "Employee Deleted",
@@ -201,7 +405,7 @@ export default function AdminDashboard() {
     if (confirm("Are you sure you want to delete this customer?")) {
       try {
         await apiClient.deleteCustomer(customerId)
-        await fetchData()
+        await customersPagination.refresh()
         toast({
           variant: "success",
           title: "Customer Deleted",
@@ -222,7 +426,7 @@ export default function AdminDashboard() {
     if (confirm("Are you sure you want to delete this application?")) {
       try {
         await apiClient.deleteApplication(applicationId)
-        await fetchData()
+        await applicationsPagination.refresh()
         toast({
           variant: "success",
           title: "Application Deleted",
@@ -239,12 +443,58 @@ export default function AdminDashboard() {
     }
   }
 
+  const handleEditEmployee = async (employeeId: string, updatedData: any) => {
+    try {
+      await apiClient.updateEmployee(employeeId, updatedData)
+      await employeesPagination.refresh()
+      toast({
+        variant: "success",
+        title: "Employee Updated",
+        description: "Employee has been updated successfully!"
+      })
+      setEditingEmployee(null)
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Failed to update employee"
+      toast({
+        variant: "destructive",
+        title: "Update Failed",
+        description: errorMessage
+      })
+    }
+  }
+
+  const handleEditCustomer = async (customerId: string, updatedData: any) => {
+    try {
+      await apiClient.updateCustomer(customerId, updatedData)
+      await customersPagination.refresh()
+      toast({
+        variant: "success",
+        title: "Customer Updated",
+        description: "Customer has been updated successfully!"
+      })
+      setEditingCustomer(null)
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Failed to update customer"
+      toast({
+        variant: "destructive",
+        title: "Update Failed",
+        description: errorMessage
+      })
+    }
+  }
+
   const sidebarItems = [
     {
       title: "Overview",
       icon: BarChart3,
       onClick: () => setActiveTab("overview"),
       active: activeTab === "overview"
+    },
+    {
+      title: "My Account",
+      icon: User,
+      onClick: () => setActiveTab("account"),
+      active: activeTab === "account"
     },
     {
       title: "Employees",
@@ -358,107 +608,372 @@ export default function AdminDashboard() {
     <ErrorBoundary>
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-white shadow-sm border-b">
+      <header className={`sticky top-0 z-50 transition-all duration-300 ${
+        scrolled ? 'bg-white/80 backdrop-blur-md shadow-lg border-b' : 'bg-white/60 backdrop-blur-sm shadow-sm border-b'
+      }`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-4">
-            <div className="flex items-center space-x-4">
-              <MobileSidebar items={sidebarItems} />
-              <div className="flex items-center space-x-2">
-                <div className="bg-blue-600 text-white px-4 py-2 rounded border-2 border-white">
-                  <div className="text-lg font-bold">OPTIONS</div>
-                  <div className="text-xs">Travel Services</div>
-                </div>
-                <span className="text-xl font-bold text-gray-900 ml-2">- Admin Portal</span>
-              </div>
+            <div className="flex items-center">
+              <button 
+                onClick={() => router.back()}
+                className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 bg-gradient-to-r from-blue-400 to-purple-500 text-white rounded-lg hover:from-blue-500 hover:to-purple-600 transition-all text-sm"
+              >
+                <ChevronLeft className="w-4 h-4" />
+                <span className="hidden sm:inline">Back</span>
+              </button>
             </div>
-            <div className="flex items-center space-x-4">
-              <ThemeToggle />
-              <Link href="/profile">
-                <Button variant="ghost" size="sm">
-                  <User className="h-4 w-4 mr-2" />
-                  Profile
-                </Button>
-              </Link>
-              <Button variant="ghost" size="sm" onClick={handleLogout}>
-                <LogOut className="h-4 w-4 mr-2" />
-                Logout
-              </Button>
+            <div className="flex-1 flex justify-center">
+              <button 
+                onClick={() => router.push('/')}
+                className="hover:opacity-80 transition-opacity"
+              >
+                <img src="/optionslogo.png" alt="Options Travel Services" className="h-12 w-auto" />
+              </button>
+            </div>
+            <div className="flex items-center space-x-2 sm:space-x-4">
+              <button 
+                onClick={() => setActiveTab('account')}
+                className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 bg-gradient-to-r from-blue-400 to-purple-500 text-white rounded-lg hover:from-blue-500 hover:to-purple-600 transition-all text-sm"
+              >
+                <User className="w-4 h-4" />
+                <span className="hidden sm:inline">Profile</span>
+              </button>
             </div>
           </div>
         </div>
       </header>
 
-      <div className="flex">
-        {/* Sidebar */}
-        <div className="hidden md:flex md:w-64 md:flex-col">
-          <div className="flex flex-col flex-grow pt-5 bg-white overflow-y-auto border-r">
-            <Sidebar items={sidebarItems} className="flex-1" />
-          </div>
-        </div>
+      {/* WhatsApp Button */}
+      <div className="fixed bottom-6 right-6 z-40">
+        <a 
+          href="https://wa.me/919226166606" 
+          target="_blank" 
+          rel="noopener noreferrer"
+          className="flex items-center justify-center w-14 h-14 bg-green-500/80 backdrop-blur-sm border border-white/20 rounded-full shadow-lg hover:bg-green-600/80 transition-all duration-300 hover:scale-110"
+        >
+          <svg className="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893A11.821 11.821 0 0020.885 3.488"/>
+          </svg>
+        </a>
+      </div>
 
-        {/* Main Content */}
-        <div className="flex-1 p-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
+        {/* Mobile Menu Button */}
+        <button 
+          onClick={() => setShowMobileMenu(!showMobileMenu)}
+          className="lg:hidden mb-4 flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-400 to-purple-500 text-white rounded-lg hover:from-blue-500 hover:to-purple-600 transition-all"
+        >
+          <Menu className="w-4 h-4" />
+          Menu
+        </button>
+
+        <div className="flex flex-col lg:flex-row gap-4 lg:gap-8">
+          {/* Mobile Menu Overlay */}
+          {showMobileMenu && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden" onClick={() => setShowMobileMenu(false)} />
+          )}
+          
+          {/* Sidebar */}
+          <div className={`${
+            showMobileMenu ? 'fixed inset-y-0 left-0 z-50 w-80' : 'hidden'
+          } lg:block lg:relative lg:w-80 bg-white rounded-lg shadow-sm border p-4 sm:p-6`}>
+            <div className="flex justify-between items-center mb-4 sm:mb-6 lg:block">
+              <h2 className="text-lg sm:text-xl font-semibold">Admin Panel</h2>
+              <button 
+                onClick={() => setShowMobileMenu(false)}
+                className="lg:hidden p-2 hover:bg-gray-100 rounded"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <nav className="space-y-1 sm:space-y-2">
+              {sidebarItems.map((item) => (
+                <button
+                  key={item.title}
+                  onClick={() => {
+                    item.onClick()
+                    setShowMobileMenu(false)
+                  }}
+                  className={`w-full flex items-center justify-between p-2 sm:p-3 rounded-lg text-left transition-colors text-sm sm:text-base ${
+                    item.active
+                      ? 'bg-blue-50 text-blue-700 border-l-4 border-blue-600'
+                      : 'hover:bg-gray-50 text-gray-700'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 sm:gap-3">
+                    <item.icon className="w-4 h-4 sm:w-5 sm:h-5" />
+                    <span>{item.title}</span>
+                  </div>
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              ))}
+            </nav>
+            <div className="mt-6 sm:mt-8 pt-4 sm:pt-6 border-t">
+              <button 
+                onClick={handleLogout}
+                className="w-full flex items-center justify-center gap-2 p-2 sm:p-3 bg-gradient-to-r from-red-400 to-red-500 text-white rounded-lg hover:from-red-500 hover:to-red-600 transition-all text-sm sm:text-base"
+              >
+                <LogOut className="w-4 h-4" />
+                Logout
+              </button>
+            </div>
+          </div>
+
+          <div className="flex-1 bg-white rounded-lg shadow-sm border p-4 sm:p-6 lg:p-8">
           {activeTab === "overview" && (
             <div className="space-y-6">
-              <div className="mb-8">
-                <h2 className="text-3xl font-bold text-gray-900 mb-2">Admin Dashboard</h2>
-                <p className="text-gray-600">Manage your visa processing platform and team.</p>
+              <div className="bg-gradient-to-r from-blue-400 via-purple-500 to-red-400 p-6 rounded-lg text-white relative">
+                <div className="flex items-center gap-4">
+                  <div className="w-16 h-16 bg-white bg-opacity-20 rounded-full flex items-center justify-center">
+                    <User className="w-14 h-14 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold">Admin Dashboard</h2>
+                    <p className="text-white text-opacity-90">Manage your visa processing platform</p>
+                  </div>
+                </div>
               </div>
 
-              {/* Overview Stats */}
-              <div className="grid md:grid-cols-4 gap-6">
-                <Card>
-                  <CardContent className="p-6">
-                    <div className="flex items-center justify-between">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="bg-blue-50 p-6 rounded-lg cursor-pointer" onClick={() => setActiveTab('account')}>
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                      <User className="w-6 h-6 text-blue-600" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-gray-900">My Account</h3>
+                      <p className="text-gray-600 text-sm">Manage your admin profile</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-pink-50 p-6 rounded-lg cursor-pointer" onClick={() => setActiveTab('employees')}>
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-pink-100 rounded-lg flex items-center justify-center">
+                      <Users className="w-6 h-6 text-pink-600" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-gray-900">Employee Management</h3>
+                      <p className="text-gray-600 text-sm">{stats.activeEmployees || 0} active employees</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-orange-50 p-6 rounded-lg cursor-pointer" onClick={() => setActiveTab('customers')}>
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
+                      <UserCheck className="w-6 h-6 text-orange-600" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-gray-900">Customer Management</h3>
+                      <p className="text-gray-600 text-sm">{stats.totalCustomers || 0} total customers</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-purple-50 p-6 rounded-lg cursor-pointer" onClick={() => setActiveTab('applications')}>
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
+                      <FileText className="w-6 h-6 text-purple-600" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-gray-900">Application Management</h3>
+                      <p className="text-gray-600 text-sm">{stats.totalApplications || 0} total applications</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-green-50 p-6 rounded-lg cursor-pointer" onClick={() => setActiveTab('payments')}>
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                      <CreditCard className="w-6 h-6 text-green-600" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-gray-900">Payment Management</h3>
+                      <p className="text-gray-600 text-sm">${stats.totalRevenue || 0} total revenue</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-yellow-50 p-6 rounded-lg cursor-pointer" onClick={() => setActiveTab('countries')}>
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
+                      <MapPin className="w-6 h-6 text-yellow-600" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-gray-900">Country Management</h3>
+                      <p className="text-gray-600 text-sm">Manage visa destinations</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-indigo-50 p-6 rounded-lg cursor-pointer" onClick={() => setActiveTab('visa-types')}>
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-indigo-100 rounded-lg flex items-center justify-center">
+                      <FileText className="w-6 h-6 text-indigo-600" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-gray-900">Visa Type Management</h3>
+                      <p className="text-gray-600 text-sm">Configure visa types</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-indigo-50 p-6 rounded-lg cursor-pointer" onClick={() => setActiveTab('reports')}>
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-indigo-100 rounded-lg flex items-center justify-center">
+                      <TrendingUp className="w-6 h-6 text-indigo-600" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-gray-900">Reports & Analytics</h3>
+                      <p className="text-gray-600 text-sm">View system insights</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-gray-50 p-6 rounded-lg cursor-pointer" onClick={() => setActiveTab('settings')}>
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
+                      <Settings className="w-6 h-6 text-gray-600" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-gray-900">System Settings</h3>
+                      <p className="text-gray-600 text-sm">Configure system preferences</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === "account" && (
+            <div className="space-y-6">
+              <h2 className="text-xl font-semibold">My Account</h2>
+              <div className="bg-white rounded-lg border p-6">
+                <div className="flex items-center gap-6 mb-6">
+                  <div className="w-20 h-20 bg-gray-200 rounded-full flex items-center justify-center">
+                    <User className="w-12 h-12 text-gray-500" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-xl font-semibold">{user?.firstName} {user?.lastName}</h3>
+                    <p className="text-gray-600">{user?.email}</p>
+                    <p className="text-sm text-gray-500">Admin ID: {user?.userId}</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button variant="outline" onClick={() => setIsEditing(!isEditing)}>
+                      <Edit className="w-4 h-4 mr-2" />
+                      {isEditing ? 'Cancel' : 'Edit Profile'}
+                    </Button>
+                    <Button variant="outline" onClick={() => setShowPasswordForm(!showPasswordForm)}>
+                      Change Password
+                    </Button>
+                  </div>
+                </div>
+                
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">First Name</label>
+                    <input 
+                      type="text" 
+                      value={isEditing ? editForm.firstName : user?.firstName || ''}
+                      onChange={(e) => setEditForm({...editForm, firstName: e.target.value})}
+                      disabled={!isEditing}
+                      className={`w-full p-3 border rounded-lg ${isEditing ? 'bg-white' : 'bg-gray-50'}`}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Last Name</label>
+                    <input 
+                      type="text" 
+                      value={isEditing ? editForm.lastName : user?.lastName || ''}
+                      onChange={(e) => setEditForm({...editForm, lastName: e.target.value})}
+                      disabled={!isEditing}
+                      className={`w-full p-3 border rounded-lg ${isEditing ? 'bg-white' : 'bg-gray-50'}`}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Email Address</label>
+                    <input 
+                      type="email" 
+                      value={user?.email || ''}
+                      disabled
+                      className="w-full p-3 border rounded-lg bg-gray-50"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">User Type</label>
+                    <input 
+                      type="text" 
+                      value={user?.userType || ''} 
+                      disabled 
+                      className="w-full p-3 border rounded-lg bg-gray-50"
+                    />
+                  </div>
+                </div>
+                
+                {isEditing && (
+                  <div className="mt-4 flex gap-2">
+                    <Button className="bg-gradient-to-r from-blue-400 to-purple-500 hover:from-blue-500 hover:to-purple-600" onClick={handleEditProfile}>Save Changes</Button>
+                    <Button variant="outline" onClick={() => setIsEditing(false)}>Cancel</Button>
+                  </div>
+                )}
+                
+                {showPasswordForm && (
+                  <div className="mt-6 p-4 border rounded-lg bg-gray-50">
+                    <h4 className="font-semibold mb-4">Change Password</h4>
+                    <div className="space-y-4">
                       <div>
-                        <p className="text-sm font-medium text-gray-600">Total Revenue</p>
-                        <p className="text-2xl font-bold text-green-600">${stats.totalRevenue || 0}</p>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Current Password</label>
+                        <input 
+                          type="password" 
+                          value={passwordForm.currentPassword}
+                          onChange={(e) => setPasswordForm({...passwordForm, currentPassword: e.target.value})}
+                          className="w-full p-3 border rounded-lg"
+                        />
                       </div>
-                      <div className="h-8 w-8 bg-green-100 rounded-full flex items-center justify-center">
-                        <DollarSign className="h-4 w-4 text-green-600" />
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">New Password</label>
+                        <input 
+                          type="password" 
+                          value={passwordForm.newPassword}
+                          onChange={(e) => setPasswordForm({...passwordForm, newPassword: e.target.value})}
+                          className="w-full p-3 border rounded-lg"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Confirm New Password</label>
+                        <input 
+                          type="password" 
+                          value={passwordForm.confirmPassword}
+                          onChange={(e) => setPasswordForm({...passwordForm, confirmPassword: e.target.value})}
+                          className="w-full p-3 border rounded-lg"
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        <Button className="bg-gradient-to-r from-blue-400 to-purple-500 hover:from-blue-500 hover:to-purple-600" onClick={handleChangePassword}>Change Password</Button>
+                        <Button variant="outline" onClick={() => setShowPasswordForm(false)}>Cancel</Button>
                       </div>
                     </div>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="p-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-medium text-gray-600">Total Customers</p>
-                        <p className="text-2xl font-bold text-blue-600">{stats.totalCustomers || 0}</p>
-                      </div>
-                      <div className="h-8 w-8 bg-blue-100 rounded-full flex items-center justify-center">
-                        <UserCheck className="h-4 w-4 text-blue-600" />
-                      </div>
+                  </div>
+                )}
+                
+                <div className="mt-6 pt-6 border-t">
+                  <h4 className="font-semibold mb-4">Admin Statistics</h4>
+                  <div className="grid md:grid-cols-3 gap-4">
+                    <div className="bg-blue-50 p-4 rounded-lg">
+                      <p className="text-sm text-gray-600">Total Applications</p>
+                      <p className="text-2xl font-bold text-blue-600">{stats.totalApplications || 0}</p>
                     </div>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="p-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-medium text-gray-600">Active Employees</p>
-                        <p className="text-2xl font-bold text-purple-600">{stats.activeEmployees || 0}</p>
-                      </div>
-                      <div className="h-8 w-8 bg-purple-100 rounded-full flex items-center justify-center">
-                        <Users className="h-4 w-4 text-purple-600" />
-                      </div>
+                    <div className="bg-green-50 p-4 rounded-lg">
+                      <p className="text-sm text-gray-600">Total Revenue</p>
+                      <p className="text-2xl font-bold text-green-600">${stats.totalRevenue || 0}</p>
                     </div>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="p-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-medium text-gray-600">Total Applications</p>
-                        <p className="text-2xl font-bold text-gray-900">{stats.totalApplications || 0}</p>
-                      </div>
-                      <div className="h-8 w-8 bg-gray-100 rounded-full flex items-center justify-center">
-                        <FileText className="h-4 w-4 text-gray-600" />
-                      </div>
+                    <div className="bg-purple-50 p-4 rounded-lg">
+                      <p className="text-sm text-gray-600">Active Employees</p>
+                      <p className="text-2xl font-bold text-purple-600">{stats.activeEmployees || 0}</p>
                     </div>
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -466,10 +981,10 @@ export default function AdminDashboard() {
           {activeTab === "employees" && (
             <div className="space-y-6">
               <div className="flex justify-between items-center">
-                <h2 className="text-3xl font-bold text-gray-900">Employee Management</h2>
+                <h2 className="text-xl font-semibold">Employee Management</h2>
                 <Dialog>
                   <DialogTrigger asChild>
-                    <Button>
+                    <Button className="bg-gradient-to-r from-blue-400 to-purple-500 hover:from-blue-500 hover:to-purple-600">
                       <Plus className="h-4 w-4 mr-2" />
                       Add Employee
                     </Button>
@@ -534,15 +1049,15 @@ export default function AdminDashboard() {
                         />
                       </div>
                       <DialogFooter>
-                        <Button type="submit">Add Employee</Button>
+                        <Button className="bg-gradient-to-r from-blue-400 to-purple-500 hover:from-blue-500 hover:to-purple-600" type="submit">Add Employee</Button>
                       </DialogFooter>
                     </form>
                   </DialogContent>
                 </Dialog>
               </div>
 
-              <Card>
-                <CardContent>
+              <div className="bg-white rounded-lg shadow-sm border">
+                <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -588,12 +1103,13 @@ export default function AdminDashboard() {
                                         status: formData.get('status') as string,
                                         role: formData.get('role') as string
                                       })
-                                      await fetchData()
+                                      await employeesPagination.refresh()
                                       toast({
                                         variant: "success",
                                         title: "Employee Updated",
                                         description: "Employee information has been updated successfully!"
                                       })
+                                      document.querySelector('[data-state="open"]')?.click()
                                     } catch (err: any) {
                                       toast({
                                         variant: "destructive",
@@ -646,7 +1162,7 @@ export default function AdminDashboard() {
                                       </Select>
                                     </div>
                                     <DialogFooter>
-                                      <Button type="submit">Update Employee</Button>
+                                      <Button className="bg-gradient-to-r from-blue-400 to-purple-500 hover:from-blue-500 hover:to-purple-600" type="submit">Update Employee</Button>
                                     </DialogFooter>
                                   </form>
                                 </DialogContent>
@@ -677,16 +1193,16 @@ export default function AdminDashboard() {
                     hasNextPage={employeesPagination.hasNextPage}
                     hasPreviousPage={employeesPagination.hasPreviousPage}
                   />
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             </div>
           )}
 
           {activeTab === "customers" && (
             <div className="space-y-6">
-              <h2 className="text-3xl font-bold text-gray-900">Customer Management</h2>
-              <Card>
-                <CardContent>
+              <h2 className="text-xl font-semibold">Customer Management</h2>
+              <div className="bg-white rounded-lg shadow-sm border">
+                <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -733,12 +1249,13 @@ export default function AdminDashboard() {
                                         phone: formData.get('phone') as string,
                                         status: formData.get('status') as string
                                       })
-                                      await fetchData()
+                                      await customersPagination.refresh()
                                       toast({
                                         variant: "success",
                                         title: "Customer Updated",
                                         description: "Customer information has been updated successfully!"
                                       })
+                                      document.querySelector('[data-state="open"]')?.click()
                                     } catch (err: any) {
                                       toast({
                                         variant: "destructive",
@@ -778,7 +1295,7 @@ export default function AdminDashboard() {
                                       </Select>
                                     </div>
                                     <DialogFooter>
-                                      <Button type="submit">Update Customer</Button>
+                                      <Button className="bg-gradient-to-r from-blue-400 to-purple-500 hover:from-blue-500 hover:to-purple-600" type="submit">Update Customer</Button>
                                     </DialogFooter>
                                   </form>
                                 </DialogContent>
@@ -809,16 +1326,16 @@ export default function AdminDashboard() {
                     hasNextPage={customersPagination.hasNextPage}
                     hasPreviousPage={customersPagination.hasPreviousPage}
                   />
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             </div>
           )}
 
           {activeTab === "applications" && (
             <div className="space-y-6">
-              <h2 className="text-3xl font-bold text-gray-900">Application Management</h2>
-              <Card>
-                <CardContent>
+              <h2 className="text-xl font-semibold">Application Management</h2>
+              <div className="bg-white rounded-lg shadow-sm border">
+                <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -867,12 +1384,13 @@ export default function AdminDashboard() {
                                         status: formData.get('status') as string,
                                         priority: formData.get('priority') as string
                                       })
-                                      await fetchData()
+                                      await applicationsPagination.refresh()
                                       toast({
                                         variant: "success",
                                         title: "Application Updated",
                                         description: "Application has been updated successfully!"
                                       })
+                                      document.querySelector('[data-state="open"]')?.click()
                                     } catch (err: any) {
                                       toast({
                                         variant: "destructive",
@@ -910,7 +1428,7 @@ export default function AdminDashboard() {
                                       </Select>
                                     </div>
                                     <DialogFooter>
-                                      <Button type="submit">Update Application</Button>
+                                      <Button className="bg-gradient-to-r from-blue-400 to-purple-500 hover:from-blue-500 hover:to-purple-600" type="submit">Update Application</Button>
                                     </DialogFooter>
                                   </form>
                                 </DialogContent>
@@ -941,16 +1459,16 @@ export default function AdminDashboard() {
                     hasNextPage={applicationsPagination.hasNextPage}
                     hasPreviousPage={applicationsPagination.hasPreviousPage}
                   />
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             </div>
           )}
 
           {activeTab === "payments" && (
             <div className="space-y-6">
-              <h2 className="text-3xl font-bold text-gray-900">Payment Management</h2>
-              <Card>
-                <CardContent>
+              <h2 className="text-xl font-semibold">Payment Management</h2>
+              <div className="bg-white rounded-lg shadow-sm border">
+                <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -979,9 +1497,129 @@ export default function AdminDashboard() {
                           <TableCell>{new Date(payment.createdAt).toLocaleDateString()}</TableCell>
                           <TableCell>
                             <div className="flex space-x-2">
-                              <Button size="sm" variant="outline">
-                                <Eye className="h-4 w-4" />
-                              </Button>
+                              <Dialog>
+                                <DialogTrigger asChild>
+                                  <Button size="sm" variant="outline">
+                                    <Eye className="h-4 w-4" />
+                                  </Button>
+                                </DialogTrigger>
+                                <DialogContent className="max-w-3xl">
+                                  <DialogHeader>
+                                    <DialogTitle>Payment Receipt</DialogTitle>
+                                  </DialogHeader>
+                                  <div className="bg-white p-6 rounded-lg border" id="payment-receipt">
+                                    {/* Header */}
+                                    <div className="text-center mb-6">
+                                      <h2 className="text-2xl font-bold text-gray-900">Payment Receipt</h2>
+                                      <div className="bg-green-50 p-3 rounded-lg mt-4">
+                                        <div className="flex items-center justify-center">
+                                          <CheckCircle className="h-6 w-6 text-green-600 mr-2" />
+                                          <span className="text-green-800 font-semibold">Payment Successful</span>
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    {/* Receipt Details */}
+                                    <div className="grid md:grid-cols-2 gap-6 mb-6">
+                                      <div>
+                                        <h3 className="font-semibold text-gray-900 mb-3">Receipt Information</h3>
+                                        <div className="space-y-2">
+                                          <div className="flex justify-between">
+                                            <span className="text-gray-600">Receipt Number:</span>
+                                            <span className="font-medium">{payment.razorpayOrderId}</span>
+                                          </div>
+                                          <div className="flex justify-between">
+                                            <span className="text-gray-600">Payment ID:</span>
+                                            <span className="font-medium">{payment.razorpayPaymentId || 'N/A'}</span>
+                                          </div>
+                                          <div className="flex justify-between">
+                                            <span className="text-gray-600">Application Number:</span>
+                                            <span className="font-medium">{payment.applicationId?.applicationNumber}</span>
+                                          </div>
+                                        </div>
+                                      </div>
+
+                                      <div>
+                                        <h3 className="font-semibold text-gray-900 mb-3">Customer Details</h3>
+                                        <div className="space-y-2">
+                                          <div className="flex justify-between">
+                                            <span className="text-gray-600">Name:</span>
+                                            <span className="font-medium">
+                                              {payment.applicationId?.customerId?.firstName} {payment.applicationId?.customerId?.lastName}
+                                            </span>
+                                          </div>
+                                          <div className="flex justify-between">
+                                            <span className="text-gray-600">Email:</span>
+                                            <span className="font-medium">{payment.applicationId?.customerId?.email}</span>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    {/* Visa Details */}
+                                    <div className="border-t pt-4 mb-6">
+                                      <h3 className="font-semibold text-gray-900 mb-3">Visa Details</h3>
+                                      <div className="grid md:grid-cols-2 gap-4">
+                                        <div className="flex justify-between">
+                                          <span className="text-gray-600">Country:</span>
+                                          <div className="flex items-center">
+                                            <span className="mr-2">{payment.applicationId?.countryId?.flagEmoji}</span>
+                                            <span className="font-medium">{payment.applicationId?.countryId?.name}</span>
+                                          </div>
+                                        </div>
+                                        <div className="flex justify-between">
+                                          <span className="text-gray-600">Visa Type:</span>
+                                          <span className="font-medium">{payment.applicationId?.visaTypeId?.name}</span>
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    {/* Payment Summary */}
+                                    <div className="bg-green-50 p-4 rounded-lg mb-6">
+                                      <h3 className="font-semibold text-gray-900 mb-3">Payment Information</h3>
+                                      <div className="space-y-2">
+                                        <div className="flex justify-between text-lg">
+                                          <span className="text-gray-700">Amount:</span>
+                                          <span className="font-bold text-green-600">₹{payment.amount}</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                          <span className="text-gray-600">Currency:</span>
+                                          <span className="font-medium">{payment.currency || 'INR'}</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                          <span className="text-gray-600">Status:</span>
+                                          <Badge className="bg-green-100 text-green-800">
+                                            {payment.status.toUpperCase()}
+                                          </Badge>
+                                        </div>
+                                        <div className="flex justify-between">
+                                          <span className="text-gray-600">Payment Date:</span>
+                                          <span className="font-medium">{new Date(payment.verifiedAt || payment.createdAt).toLocaleString()}</span>
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    {/* Footer */}
+                                    <div className="text-center text-gray-500 text-sm border-t pt-4">
+                                      <p>Thank you for using Options Travel Services!</p>
+                                      <p>This is an automated receipt. Please keep it for your records.</p>
+                                    </div>
+
+                                    {/* Action Buttons */}
+                                    <div className="flex justify-center gap-3 mt-6">
+                                      <Button 
+                                        variant="outline"
+                                        onClick={() => window.print()}
+                                      >
+                                        Print Receipt
+                                      </Button>
+                                      <Button>
+                                        Download Receipt
+                                      </Button>
+                                    </div>
+                                  </div>
+                                </DialogContent>
+                              </Dialog>
                             </div>
                           </TableCell>
                         </TableRow>
@@ -1000,14 +1638,14 @@ export default function AdminDashboard() {
                     hasNextPage={paymentsPagination.hasNextPage}
                     hasPreviousPage={paymentsPagination.hasPreviousPage}
                   />
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             </div>
           )}
 
           {activeTab === "reports" && (
             <div className="space-y-6">
-              <h2 className="text-3xl font-bold text-gray-900">Reports & Analytics</h2>
+              <h2 className="text-xl font-semibold">Reports & Analytics</h2>
               <div className="grid md:grid-cols-2 gap-6">
                 <Card>
                   <CardHeader>
@@ -1055,10 +1693,10 @@ export default function AdminDashboard() {
           {activeTab === "countries" && (
             <div className="space-y-6">
               <div className="flex justify-between items-center">
-                <h2 className="text-3xl font-bold text-gray-900">Country Management</h2>
+                <h2 className="text-xl font-semibold">Country Management</h2>
                 <Dialog>
                   <DialogTrigger asChild>
-                    <Button>
+                    <Button className="bg-gradient-to-r from-blue-400 to-purple-500 hover:from-blue-500 hover:to-purple-600">
                       <Plus className="h-4 w-4 mr-2" />
                       Add Country
                     </Button>
@@ -1080,7 +1718,7 @@ export default function AdminDashboard() {
                           processingTimeMax: Number(formData.get('processingTimeMax')),
                           isActive: true
                         })
-                        await fetchData()
+                        countriesPagination.refresh()
                         toast({ variant: "success", title: "Country Created", description: "Country added successfully!" })
                       } catch (err: any) {
                         toast({ variant: "destructive", title: "Creation Failed", description: err.message })
@@ -1126,14 +1764,14 @@ export default function AdminDashboard() {
                         </div>
                       </div>
                       <DialogFooter>
-                        <Button type="submit">Add Country</Button>
+                        <Button className="bg-gradient-to-r from-blue-400 to-purple-500 hover:from-blue-500 hover:to-purple-600" type="submit">Add Country</Button>
                       </DialogFooter>
                     </form>
                   </DialogContent>
                 </Dialog>
               </div>
-              <Card>
-                <CardContent>
+              <div className="bg-white rounded-lg shadow-sm border">
+                <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -1147,7 +1785,7 @@ export default function AdminDashboard() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {countries.map((country) => (
+                      {countriesPagination.paginatedData.map((country) => (
                         <TableRow key={country._id}>
                           <TableCell>{country.name}</TableCell>
                           <TableCell>{country.code}</TableCell>
@@ -1184,7 +1822,7 @@ export default function AdminDashboard() {
                                         processingTimeMax: Number(formData.get('processingTimeMax')),
                                         isActive: formData.get('isActive') === 'true'
                                       })
-                                      await fetchData()
+                                      countriesPagination.refresh()
                                       toast({ variant: "success", title: "Country Updated" })
                                     } catch (err: any) {
                                       toast({ variant: "destructive", title: "Update Failed", description: err.message })
@@ -1237,7 +1875,7 @@ export default function AdminDashboard() {
                                       </select>
                                     </div>
                                     <DialogFooter>
-                                      <Button type="submit">Update Country</Button>
+                                      <Button className="bg-gradient-to-r from-blue-400 to-purple-500 hover:from-blue-500 hover:to-purple-600" type="submit">Update Country</Button>
                                     </DialogFooter>
                                   </form>
                                 </DialogContent>
@@ -1246,7 +1884,7 @@ export default function AdminDashboard() {
                                 if (confirm('Delete this country?')) {
                                   try {
                                     await apiClient.deleteCountry(country._id)
-                                    await fetchData()
+                                    countriesPagination.refresh()
                                     toast({ variant: "success", title: "Country Deleted" })
                                   } catch (err: any) {
                                     toast({ variant: "destructive", title: "Delete Failed", description: err.message })
@@ -1261,19 +1899,30 @@ export default function AdminDashboard() {
                       ))}
                     </TableBody>
                   </Table>
-
-                </CardContent>
-              </Card>
+                  <TablePagination
+                    currentPage={countriesPagination.currentPage}
+                    totalPages={countriesPagination.totalPages}
+                    pageSize={countriesPagination.pageSize}
+                    totalItems={countriesPagination.totalItems}
+                    startIndex={countriesPagination.startIndex}
+                    endIndex={countriesPagination.endIndex}
+                    onPageChange={countriesPagination.goToPage}
+                    onPageSizeChange={countriesPagination.changePageSize}
+                    hasNextPage={countriesPagination.hasNextPage}
+                    hasPreviousPage={countriesPagination.hasPreviousPage}
+                  />
+                </div>
+              </div>
             </div>
           )}
 
           {activeTab === "visa-types" && (
             <div className="space-y-6">
               <div className="flex justify-between items-center">
-                <h2 className="text-3xl font-bold text-gray-900">Visa Type Management</h2>
+                <h2 className="text-xl font-semibold">Visa Type Management</h2>
                 <Dialog>
                   <DialogTrigger asChild>
-                    <Button>
+                    <Button className="bg-gradient-to-r from-blue-400 to-purple-500 hover:from-blue-500 hover:to-purple-600">
                       <Plus className="h-4 w-4 mr-2" />
                       Add Visa Type
                     </Button>
@@ -1295,7 +1944,7 @@ export default function AdminDashboard() {
                           requiredDocuments: (formData.get('requiredDocuments') as string).split(',').map(d => d.trim()),
                           isActive: true
                         })
-                        await fetchData()
+                        visaTypesPagination.refresh()
                         toast({ variant: "success", title: "Visa Type Created" })
                       } catch (err: any) {
                         toast({ variant: "destructive", title: "Creation Failed", description: err.message })
@@ -1353,14 +2002,14 @@ export default function AdminDashboard() {
                         </div>
                       </div>
                       <DialogFooter>
-                        <Button type="submit">Add Visa Type</Button>
+                        <Button className="bg-gradient-to-r from-blue-400 to-purple-500 hover:from-blue-500 hover:to-purple-600" type="submit">Add Visa Type</Button>
                       </DialogFooter>
                     </form>
                   </DialogContent>
                 </Dialog>
               </div>
-              <Card>
-                <CardContent>
+              <div className="bg-white rounded-lg shadow-sm border">
+                <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -1373,7 +2022,7 @@ export default function AdminDashboard() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {visaTypes.map((visaType) => (
+                      {visaTypesPagination.paginatedData.map((visaType) => (
                         <TableRow key={visaType._id}>
                           <TableCell>{visaType.name}</TableCell>
                           <TableCell>
@@ -1411,7 +2060,7 @@ export default function AdminDashboard() {
                                         requiredDocuments: (formData.get('requiredDocuments') as string).split(',').map(d => d.trim()),
                                         isActive: formData.get('isActive') === 'true'
                                       })
-                                      await fetchData()
+                                      visaTypesPagination.refresh()
                                       toast({ variant: "success", title: "Visa Type Updated" })
                                     } catch (err: any) {
                                       toast({ variant: "destructive", title: "Update Failed", description: err.message })
@@ -1455,7 +2104,7 @@ export default function AdminDashboard() {
                                       </select>
                                     </div>
                                     <DialogFooter>
-                                      <Button type="submit">Update Visa Type</Button>
+                                      <Button className="bg-gradient-to-r from-blue-400 to-purple-500 hover:from-blue-500 hover:to-purple-600" type="submit">Update Visa Type</Button>
                                     </DialogFooter>
                                   </form>
                                 </DialogContent>
@@ -1464,7 +2113,7 @@ export default function AdminDashboard() {
                                 if (confirm('Delete this visa type?')) {
                                   try {
                                     await apiClient.deleteVisaType(visaType._id)
-                                    await fetchData()
+                                    visaTypesPagination.refresh()
                                     toast({ variant: "success", title: "Visa Type Deleted" })
                                   } catch (err: any) {
                                     toast({ variant: "destructive", title: "Delete Failed", description: err.message })
@@ -1479,19 +2128,143 @@ export default function AdminDashboard() {
                       ))}
                     </TableBody>
                   </Table>
-
-                </CardContent>
-              </Card>
+                  <TablePagination
+                    currentPage={visaTypesPagination.currentPage}
+                    totalPages={visaTypesPagination.totalPages}
+                    pageSize={visaTypesPagination.pageSize}
+                    totalItems={visaTypesPagination.totalItems}
+                    startIndex={visaTypesPagination.startIndex}
+                    endIndex={visaTypesPagination.endIndex}
+                    onPageChange={visaTypesPagination.goToPage}
+                    onPageSizeChange={visaTypesPagination.changePageSize}
+                    hasNextPage={visaTypesPagination.hasNextPage}
+                    hasPreviousPage={visaTypesPagination.hasPreviousPage}
+                  />
+                </div>
+              </div>
             </div>
           )}
 
           {activeTab === "settings" && (
             <div className="space-y-6">
+              {/* Notification Toggle Settings */}
+              <div className="bg-white rounded-lg shadow-sm border p-6 mb-6">
+                <h3 className="text-lg font-semibold mb-4">Notification Settings</h3>
+                <p className="text-gray-600 mb-4">Toggle notification channels. When turned off, notifications will not be sent through that channel.</p>
+                
+                <div className="grid md:grid-cols-3 gap-6">
+                  {/* Email Notifications Toggle */}
+                  <div className="flex items-center justify-between p-4 border rounded-lg bg-gray-50">
+                    <div>
+                      <h4 className="font-medium">Email Notifications</h4>
+                      <p className="text-sm text-gray-500">Send notifications via email</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        className="sr-only peer" 
+                        checked={notificationSettings.email}
+                        onChange={async (e) => {
+                          try {
+                            setNotificationSettings(prev => ({ ...prev, email: e.target.checked }))
+                            await apiClient.updateNotificationSetting('email', e.target.checked)
+                            toast({
+                              variant: "success",
+                              title: "Setting Updated",
+                              description: `Email notifications ${e.target.checked ? 'enabled' : 'disabled'}`
+                            })
+                          } catch (err: any) {
+                            // Revert state on error
+                            setNotificationSettings(prev => ({ ...prev, email: !e.target.checked }))
+                            toast({
+                              variant: "destructive",
+                              title: "Update Failed",
+                              description: err.message
+                            })
+                          }
+                        }}
+                      />
+                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                    </label>
+                  </div>
+                  
+                  {/* SMS Notifications Toggle */}
+                  <div className="flex items-center justify-between p-4 border rounded-lg bg-gray-50">
+                    <div>
+                      <h4 className="font-medium">SMS Notifications</h4>
+                      <p className="text-sm text-gray-500">Send notifications via SMS</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        className="sr-only peer" 
+                        checked={notificationSettings.sms}
+                        onChange={async (e) => {
+                          try {
+                            setNotificationSettings(prev => ({ ...prev, sms: e.target.checked }))
+                            await apiClient.updateNotificationSetting('sms', e.target.checked)
+                            toast({
+                              variant: "success",
+                              title: "Setting Updated",
+                              description: `SMS notifications ${e.target.checked ? 'enabled' : 'disabled'}`
+                            })
+                          } catch (err: any) {
+                            // Revert state on error
+                            setNotificationSettings(prev => ({ ...prev, sms: !e.target.checked }))
+                            toast({
+                              variant: "destructive",
+                              title: "Update Failed",
+                              description: err.message
+                            })
+                          }
+                        }}
+                      />
+                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                    </label>
+                  </div>
+                  
+                  {/* WhatsApp Notifications Toggle */}
+                  <div className="flex items-center justify-between p-4 border rounded-lg bg-gray-50">
+                    <div>
+                      <h4 className="font-medium">WhatsApp Notifications</h4>
+                      <p className="text-sm text-gray-500">Send notifications via WhatsApp</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        className="sr-only peer" 
+                        checked={notificationSettings.whatsapp}
+                        onChange={async (e) => {
+                          try {
+                            setNotificationSettings(prev => ({ ...prev, whatsapp: e.target.checked }))
+                            await apiClient.updateNotificationSetting('whatsapp', e.target.checked)
+                            toast({
+                              variant: "success",
+                              title: "Setting Updated",
+                              description: `WhatsApp notifications ${e.target.checked ? 'enabled' : 'disabled'}`
+                            })
+                          } catch (err: any) {
+                            // Revert state on error
+                            setNotificationSettings(prev => ({ ...prev, whatsapp: !e.target.checked }))
+                            toast({
+                              variant: "destructive",
+                              title: "Update Failed",
+                              description: err.message
+                            })
+                          }
+                        }}
+                      />
+                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                    </label>
+                  </div>
+                </div>
+              </div>
+              
               <div className="flex justify-between items-center">
-                <h2 className="text-3xl font-bold text-gray-900">System Settings</h2>
+                <h2 className="text-xl font-semibold">System Settings</h2>
                 <Dialog>
                   <DialogTrigger asChild>
-                    <Button>
+                    <Button className="bg-gradient-to-r from-blue-400 to-purple-500 hover:from-blue-500 hover:to-purple-600">
                       <Plus className="h-4 w-4 mr-2" />
                       Add Setting
                     </Button>
@@ -1509,7 +2282,7 @@ export default function AdminDashboard() {
                           value: formData.get('value') as string,
                           description: formData.get('description') as string
                         })
-                        await fetchData()
+                        settingsPagination.refresh()
                         toast({ variant: "success", title: "Setting Created" })
                       } catch (err: any) {
                         toast({ variant: "destructive", title: "Creation Failed", description: err.message })
@@ -1528,14 +2301,14 @@ export default function AdminDashboard() {
                         <Input name="description" />
                       </div>
                       <DialogFooter>
-                        <Button type="submit">Add Setting</Button>
+                        <Button className="bg-gradient-to-r from-blue-400 to-purple-500 hover:from-blue-500 hover:to-purple-600" type="submit">Add Setting</Button>
                       </DialogFooter>
                     </form>
                   </DialogContent>
                 </Dialog>
               </div>
-              <Card>
-                <CardContent>
+              <div className="bg-white rounded-lg shadow-sm border">
+                <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -1547,7 +2320,7 @@ export default function AdminDashboard() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {settings.map((setting) => (
+                      {settingsPagination.paginatedData.map((setting) => (
                         <TableRow key={setting._id}>
                           <TableCell className="font-medium">{setting.key}</TableCell>
                           <TableCell>{setting.value}</TableCell>
@@ -1574,7 +2347,7 @@ export default function AdminDashboard() {
                                         value: formData.get('value') as string,
                                         description: formData.get('description') as string
                                       })
-                                      await fetchData()
+                                      settingsPagination.refresh()
                                       toast({ variant: "success", title: "Setting Updated" })
                                     } catch (err: any) {
                                       toast({ variant: "destructive", title: "Update Failed", description: err.message })
@@ -1593,7 +2366,7 @@ export default function AdminDashboard() {
                                       <Input name="description" defaultValue={setting.description || ''} />
                                     </div>
                                     <DialogFooter>
-                                      <Button type="submit">Update Setting</Button>
+                                      <Button className="bg-gradient-to-r from-blue-400 to-purple-500 hover:from-blue-500 hover:to-purple-600" type="submit">Update Setting</Button>
                                     </DialogFooter>
                                   </form>
                                 </DialogContent>
@@ -1602,7 +2375,7 @@ export default function AdminDashboard() {
                                 if (confirm('Delete this setting?')) {
                                   try {
                                     await apiClient.deleteSystemSetting(setting.key)
-                                    await fetchData()
+                                    settingsPagination.refresh()
                                     toast({ variant: "success", title: "Setting Deleted" })
                                   } catch (err: any) {
                                     toast({ variant: "destructive", title: "Delete Failed", description: err.message })
@@ -1617,11 +2390,23 @@ export default function AdminDashboard() {
                       ))}
                     </TableBody>
                   </Table>
-
-                </CardContent>
-              </Card>
+                  <TablePagination
+                    currentPage={settingsPagination.currentPage}
+                    totalPages={settingsPagination.totalPages}
+                    pageSize={settingsPagination.pageSize}
+                    totalItems={settingsPagination.totalItems}
+                    startIndex={settingsPagination.startIndex}
+                    endIndex={settingsPagination.endIndex}
+                    onPageChange={settingsPagination.goToPage}
+                    onPageSizeChange={settingsPagination.changePageSize}
+                    hasNextPage={settingsPagination.hasNextPage}
+                    hasPreviousPage={settingsPagination.hasPreviousPage}
+                  />
+                </div>
+              </div>
             </div>
           )}
+          </div>
         </div>
       </div>
     </div>

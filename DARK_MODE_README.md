@@ -1,7 +1,7 @@
-# Dark Mode Implementation for VisaFlow
+# Dark Mode Implementation for Options Travel Services
 
 ## Overview
-This implementation adds a comprehensive dark mode toggle to the VisaFlow application with support for light, dark, and system preference themes.
+This implementation adds a comprehensive dark mode toggle to the Options Travel Services application with support for light, dark, and system preference themes.
 
 ## Features
 - ✅ Light/Dark/System theme options

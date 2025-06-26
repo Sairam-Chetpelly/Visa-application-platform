@@ -83,7 +83,7 @@ export default function PaymentModal({
       key: paymentData.key,
       amount: paymentData.amount,
       currency: paymentData.currency,
-      name: 'VisaFlow',
+      name: 'Options Travel Services',
       description: `${paymentData.country} ${paymentData.visaType} Visa`,
       order_id: paymentData.orderId,
       handler: function (response: any) {

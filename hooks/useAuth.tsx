@@ -25,17 +25,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (typeof window !== "undefined") {
       const token = localStorage.getItem("auth_token")
+      const storedUser = localStorage.getItem("user")
+      
       if (token) {
         try {
           const payload = JSON.parse(atob(token.split(".")[1]))
           if (payload.exp * 1000 > Date.now()) {
-            setUser({
-              id: payload.userId,
-              email: payload.email,
-              firstName: payload.firstName,
-              lastName: payload.lastName,
-              userType: payload.userType,
-            })
+            // Use stored user data if available as it may have more recent profile updates
+            if (storedUser) {
+              try {
+                const userData = JSON.parse(storedUser)
+                setUser({
+                  id: payload.userId,
+                  email: payload.email,
+                  firstName: userData.firstName || payload.firstName,
+                  lastName: userData.lastName || payload.lastName,
+                  userType: payload.userType,
+                })
+              } catch {
+                // Fallback to token data if user parsing fails
+                setUser({
+                  id: payload.userId,
+                  email: payload.email,
+                  firstName: payload.firstName,
+                  lastName: payload.lastName,
+                  userType: payload.userType,
+                })
+              }
+            } else {
+              setUser({
+                id: payload.userId,
+                email: payload.email,
+                firstName: payload.firstName,
+                lastName: payload.lastName,
+                userType: payload.userType,
+              })
+            }
           } else {
             localStorage.removeItem("auth_token")
           }

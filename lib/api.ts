@@ -340,8 +340,8 @@ class ApiClient {
   }
 
   // Admin Country Management
-  async getAdminCountries() {
-    return this.request("/admin/countries")
+  async getAdminCountries(page = 1, limit = 10) {
+    return this.request(`/admin/countries?page=${page}&limit=${limit}`)
   }
 
   async createCountry(countryData: any) {
@@ -365,8 +365,8 @@ class ApiClient {
   }
 
   // Admin Visa Type Management
-  async getAdminVisaTypes() {
-    return this.request("/admin/visa-types")
+  async getAdminVisaTypes(page = 1, limit = 10) {
+    return this.request(`/admin/visa-types?page=${page}&limit=${limit}`)
   }
 
   async createVisaType(visaTypeData: any) {
@@ -390,8 +390,8 @@ class ApiClient {
   }
 
   // Admin System Settings
-  async getSystemSettings() {
-    return this.request("/admin/settings")
+  async getSystemSettings(page = 1, limit = 10) {
+    return this.request(`/admin/settings?page=${page}&limit=${limit}`)
   }
 
   async updateSystemSetting(settingData: { key: string; value: string; description?: string }) {
@@ -405,6 +405,29 @@ class ApiClient {
     return this.request(`/admin/settings/${key}`, {
       method: "DELETE",
     })
+  }
+  
+  // Notification Settings
+  async getNotificationSettings() {
+    return this.request("/admin/notification-settings")
+  }
+  
+  async updateNotificationSetting(channel: string, enabled: boolean) {
+    return this.updateSystemSetting({
+      key: `notifications_${channel}_enabled`,
+      value: enabled ? "true" : "false",
+      description: `Enable/disable ${channel} notifications`
+    })
+  }
+
+  // Admin Employee Management
+  async getAdminEmployees(page = 1, limit = 10) {
+    return this.request(`/admin/employees?page=${page}&limit=${limit}`)
+  }
+
+  // Admin Customer Management  
+  async getAdminCustomers(page = 1, limit = 10) {
+    return this.request(`/admin/customers?page=${page}&limit=${limit}`)
   }
 
   // ===== COMPREHENSIVE LIST ENDPOINTS =====

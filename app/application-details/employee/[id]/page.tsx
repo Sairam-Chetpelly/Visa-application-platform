@@ -17,7 +17,7 @@ import Link from "next/link"
 export default function EmployeeApplicationDetailsPage() {
   const router = useRouter()
   const params = useParams()
-  const { user } = useAuth()
+  const { user,initialized } = useAuth()
   const { toast } = useToast()
   const [application, setApplication] = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -26,6 +26,7 @@ export default function EmployeeApplicationDetailsPage() {
   const [updating, setUpdating] = useState(false)
 
   useEffect(() => {
+    if (!initialized) return
     if (!user) {
       router.push("/login")
       return
@@ -39,7 +40,7 @@ export default function EmployeeApplicationDetailsPage() {
     if (params.id) {
       fetchApplicationDetails()
     }
-  }, [user, params.id, router])
+  }, [user, params.id, router,initialized])
 
   const fetchApplicationDetails = async () => {
     try {

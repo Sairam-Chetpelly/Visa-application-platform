@@ -12,12 +12,13 @@ import Link from "next/link"
 
 export default function EmployeePerformancePage() {
   const router = useRouter()
-  const { user } = useAuth()
+  const { user,initialized } = useAuth()
   const [performance, setPerformance] = useState<EmployeePerformance | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    if (!initialized) return
     if (!user) {
       router.push("/login")
       return
@@ -29,7 +30,7 @@ export default function EmployeePerformancePage() {
     }
 
     fetchPerformanceData()
-  }, [user, router])
+  }, [user, router,initialized])
 
   const fetchPerformanceData = async () => {
     try {

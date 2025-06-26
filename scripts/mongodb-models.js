@@ -149,8 +149,8 @@ const paymentOrderSchema = new mongoose.Schema({
 
 // System Settings Schema
 const systemSettingsSchema = new mongoose.Schema({
-  settingKey: { type: String, required: true, unique: true },
-  settingValue: String,
+  key: { type: String, required: true, unique: true },
+  value: String,
   description: String,
   updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
 }, { timestamps: true })

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -12,13 +12,16 @@ import { ThemeToggle } from "@/components/ui/theme-toggle"
 
 export default function NewApplicationPage() {
   const router = useRouter()
-  const { user } = useAuth()
+  const searchParams = useSearchParams()
+  const countryId = searchParams.get('countryId')
+  const { user,initialized } = useAuth()
   const [countries, setCountries] = useState<Country[]>([])
   const [selectedCountry, setSelectedCountry] = useState<Country | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+     if (!initialized) return
     if (!user) {
       router.push("/login")
       return
@@ -30,13 +33,24 @@ export default function NewApplicationPage() {
     }
 
     fetchCountries()
-  }, [user, router])
+  }, [user, router,initialized])
 
   const fetchCountries = async () => {
     try {
       setLoading(true)
       const countriesData = await apiClient.getCountries()
-      setCountries(countriesData)
+      
+      if (countryId) {
+        const country = countriesData.find(c => c.id.toString() === countryId)
+        if (country) {
+          setSelectedCountry(country)
+          setCountries([country])
+        } else {
+          setError("Country not found")
+        }
+      } else {
+        setCountries(countriesData)
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to fetch countries")
     } finally {
@@ -208,7 +222,9 @@ export default function NewApplicationPage() {
                     Choose Different Country
                   </Button>
                   <Link href={`/application-form?country=${selectedCountry.id}`}>
-                    <Button>Start Application</Button>
+                    <Button className="bg-blue-600 hover:bg-blue-700">
+                      Start Application
+                    </Button>
                   </Link>
                 </div>
               </CardContent>

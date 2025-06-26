@@ -1,6 +1,6 @@
 # Dark Mode Implementation Guide
 
-This guide explains how dark mode is implemented in the VisaFlow application and how to use it effectively.
+This guide explains how dark mode is implemented in the Options Travel Services application and how to use it effectively.
 
 ## Features
 

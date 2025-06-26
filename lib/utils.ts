@@ -58,7 +58,9 @@ export function validateEmail(email: string): boolean {
 }
 
 export function validatePhone(phone: string): boolean {
-  const phoneRegex = /^\+?[\d\s\-\(\)]{10,}$/
+  // This regex handles international phone numbers with country codes
+  // It requires at least 8 digits total (country code + number), allowing for spaces, dashes, and parentheses
+  const phoneRegex = /^[\d]{1,4}[\d\s\-\(\)]{7,}$/
   return phoneRegex.test(phone)
 }
 
