@@ -1953,15 +1953,24 @@ app.get("/api/admin/notification-settings", authenticateToken, async (req, res) 
       return res.status(403).json({ error: "Access denied" })
     }
     
+    console.log("Fetching notification settings for admin dashboard")
+    
     // Import the notification service function
     const { isNotificationChannelEnabled } = await import('./notification-service.js')
     
     // Check status of each notification channel
+    console.log("Checking status of all notification channels...")
     const [emailEnabled, smsEnabled, whatsappEnabled] = await Promise.all([
       isNotificationChannelEnabled('email'),
       isNotificationChannelEnabled('sms'),
       isNotificationChannelEnabled('whatsapp')
     ])
+    
+    console.log("Notification settings retrieved:", { 
+      email: emailEnabled, 
+      sms: smsEnabled, 
+      whatsapp: whatsappEnabled 
+    })
     
     res.json({
       email: emailEnabled,
@@ -1980,13 +1989,34 @@ app.post("/api/admin/settings", authenticateToken, async (req, res) => {
       return res.status(403).json({ error: "Access denied" })
     }
     const { key, value, description } = req.body
-    await SystemSettings.findOneAndUpdate(
+    
+    console.log(`Updating system setting: ${key} = ${value}`)
+    
+    if (!key) {
+      console.error("Missing key in system settings update")
+      return res.status(400).json({ error: "Setting key is required" })
+    }
+    
+    if (value === undefined) {
+      console.error("Missing value in system settings update")
+      return res.status(400).json({ error: "Setting value is required" })
+    }
+    
+    // Check if this is a notification setting
+    if (key.startsWith('notifications_') && key.endsWith('_enabled')) {
+      console.log(`Updating notification setting: ${key}`)
+    }
+    
+    const result = await SystemSettings.findOneAndUpdate(
       { key },
       { key, value, description, updatedBy: req.user.userId },
-      { upsert: true }
+      { upsert: true, new: true }
     )
-    res.json({ message: "Setting updated successfully" })
+    
+    console.log(`Setting updated successfully: ${key} = ${value}`, result)
+    res.json({ message: "Setting updated successfully", setting: result })
   } catch (error) {
+    console.error("Error updating system setting:", error)
     res.status(500).json({ error: "Internal server error" })
   }
 })

@@ -74,7 +74,7 @@ if curl -s http://localhost:3001/api/health > /dev/null 2>&1; then
     echo "🔍 Testing admin login..."
     RESPONSE=$(curl -s -X POST http://localhost:3001/api/login \
         -H "Content-Type: application/json" \
-        -d '{"email":"admin@visaflow.com","password":"password123"}')
+        -d '{"email":"admin@visaflow.com","password":"admin123"}')
     
     if echo "$RESPONSE" | grep -q "token"; then
         echo "✅ Admin login successful"
@@ -113,7 +113,7 @@ if curl -s http://localhost:3000 > /dev/null 2>&1; then
     echo ""
     echo "🎉 All systems ready!"
     echo "📱 Admin Dashboard: http://localhost:3000/admin-dashboard"
-    echo "🔑 Login: admin@visaflow.com / password123"
+    echo "🔑 Login: admin@visaflow.com / admin123"
 else
     echo "❌ Frontend server is not running"
     echo "💡 Start frontend server with: npm run dev"

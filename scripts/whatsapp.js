@@ -8,7 +8,17 @@ const ADMIN_WHATSAPP = process.env.ADMIN_WHATSAPP || '919226166606'
 
 export const sendWhatsAppNotification = async (phoneNumber, message) => {
   try {
-    const url = `${WHATSAPP_API_URL}?APIkey=${WHATSAPP_API_KEY}&channelId=${WHATSAPP_CHANNEL_ID}&mobile=${phoneNumber}&messageText=${encodeURIComponent(message)}`
+    console.log(`📱 Preparing WhatsApp notification to ${phoneNumber}`)
+    console.log(`📱 API URL: ${WHATSAPP_API_URL}`)
+    console.log(`📱 Channel ID: ${WHATSAPP_CHANNEL_ID}`)
+    console.log(`📱 Message length: ${message.length} characters`)
+    
+    // Format phone number if needed (remove spaces, ensure country code, etc.)
+    const formattedPhone = phoneNumber.startsWith('+') ? phoneNumber.substring(1) : phoneNumber
+    console.log(`📱 Formatted phone: ${formattedPhone}`)
+    
+    const url = `${WHATSAPP_API_URL}?APIkey=${WHATSAPP_API_KEY}&channelId=${WHATSAPP_CHANNEL_ID}&mobile=${formattedPhone}&messageText=${encodeURIComponent(message)}`
+    console.log(`📱 Request URL (partial): ${WHATSAPP_API_URL}?APIkey=****&channelId=${WHATSAPP_CHANNEL_ID}&mobile=${formattedPhone}`)
     
     const response = await fetch(url, {
       method: 'GET',
@@ -18,9 +28,15 @@ export const sendWhatsAppNotification = async (phoneNumber, message) => {
     })
     
     const result = await response.text()
-    console.log(`📱 WhatsApp sent to ${phoneNumber}:`, result)
+    console.log(`📱 WhatsApp API response for ${phoneNumber}:`, result)
     
-    return { success: true, message: 'WhatsApp notification sent', response: result }
+    if (response.ok) {
+      console.log(`📱 WhatsApp notification successfully sent to ${phoneNumber}`)
+      return { success: true, message: 'WhatsApp notification sent', response: result }
+    } else {
+      console.error(`📱 WhatsApp API returned non-OK status: ${response.status}`)
+      return { success: false, error: `API returned status ${response.status}: ${result}` }
+    }
   } catch (error) {
     console.error('WhatsApp notification failed:', error)
     return { success: false, error: error.message }

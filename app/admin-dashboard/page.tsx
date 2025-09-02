@@ -37,6 +37,7 @@ export default function AdminDashboard() {
     sms: true,
     whatsapp: true
   })
+  const [updatingSettings, setUpdatingSettings] = useState(false)
   const [stats, setStats] = useState<DashboardStats>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -212,6 +213,38 @@ export default function AdminDashboard() {
       
       loadNotificationSettings()
     }
+  }, [activeTab])
+  
+  // Handle notification setting toggle
+  const handleNotificationSettingChange = async (channel, enabled) => {
+    try {
+      setUpdatingSettings(true)
+      await apiClient.updateNotificationSetting(channel, enabled)
+      setNotificationSettings(prev => ({
+        ...prev,
+        [channel]: enabled
+      }))
+      toast({
+        variant: "success",
+        title: "Settings Updated",
+        description: `${channel.charAt(0).toUpperCase() + channel.slice(1)} notifications ${enabled ? 'enabled' : 'disabled'} successfully.`
+      })
+    } catch (error) {
+      console.error(`Failed to update ${channel} notification setting:`, error)
+      toast({
+        variant: "destructive",
+        title: "Update Failed",
+        description: `Failed to update ${channel} notification settings. Please try again.`
+      })
+      // Revert the UI state
+      setNotificationSettings(prev => ({
+        ...prev,
+        [channel]: !enabled
+      }))
+    } finally {
+      setUpdatingSettings(false)
+    }
+  }
     
     // Load countries data when visa-types tab is active
     if (activeTab === "visa-types") {
@@ -2164,8 +2197,9 @@ export default function AdminDashboard() {
                         type="checkbox" 
                         className="sr-only peer" 
                         checked={notificationSettings.email}
-                        onChange={async (e) => {
-                          try {
+                        disabled={updatingSettings}
+                        onChange={(e) => handleNotificationSettingChange('email', e.target.checked)}
+                      />
                             setNotificationSettings(prev => ({ ...prev, email: e.target.checked }))
                             await apiClient.updateNotificationSetting('email', e.target.checked)
                             toast({
@@ -2199,19 +2233,9 @@ export default function AdminDashboard() {
                         type="checkbox" 
                         className="sr-only peer" 
                         checked={notificationSettings.sms}
-                        onChange={async (e) => {
-                          try {
-                            setNotificationSettings(prev => ({ ...prev, sms: e.target.checked }))
-                            await apiClient.updateNotificationSetting('sms', e.target.checked)
-                            toast({
-                              variant: "success",
-                              title: "Setting Updated",
-                              description: `SMS notifications ${e.target.checked ? 'enabled' : 'disabled'}`
-                            })
-                          } catch (err: any) {
-                            // Revert state on error
-                            setNotificationSettings(prev => ({ ...prev, sms: !e.target.checked }))
-                            toast({
+                        disabled={updatingSettings}
+                        onChange={(e) => handleNotificationSettingChange('sms', e.target.checked)}
+                      />
                               variant: "destructive",
                               title: "Update Failed",
                               description: err.message
@@ -2234,19 +2258,9 @@ export default function AdminDashboard() {
                         type="checkbox" 
                         className="sr-only peer" 
                         checked={notificationSettings.whatsapp}
-                        onChange={async (e) => {
-                          try {
-                            setNotificationSettings(prev => ({ ...prev, whatsapp: e.target.checked }))
-                            await apiClient.updateNotificationSetting('whatsapp', e.target.checked)
-                            toast({
-                              variant: "success",
-                              title: "Setting Updated",
-                              description: `WhatsApp notifications ${e.target.checked ? 'enabled' : 'disabled'}`
-                            })
-                          } catch (err: any) {
-                            // Revert state on error
-                            setNotificationSettings(prev => ({ ...prev, whatsapp: !e.target.checked }))
-                            toast({
+                        disabled={updatingSettings}
+                        onChange={(e) => handleNotificationSettingChange('whatsapp', e.target.checked)}
+                      />
                               variant: "destructive",
                               title: "Update Failed",
                               description: err.message

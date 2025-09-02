@@ -5,12 +5,24 @@ import { sendWhatsAppNotification } from './whatsapp.js'
 // Check if a notification channel is enabled
 export const isNotificationChannelEnabled = async (channel) => {
   try {
-    const setting = await SystemSettings.findOne({ key: `notifications_${channel}_enabled` })
-    // Default to true if setting doesn't exist
-    return !setting || setting.value !== 'false'
+    console.log(`Checking if ${channel} notifications are enabled...`)
+    const settingKey = `notifications_${channel}_enabled`
+    console.log(`Looking for setting with key: ${settingKey}`)
+    
+    const setting = await SystemSettings.findOne({ key: settingKey })
+    
+    if (!setting) {
+      console.log(`No setting found for ${channel}, defaulting to enabled`)
+      return true
+    }
+    
+    const isEnabled = setting.value !== 'false'
+    console.log(`${channel} notifications setting found: ${setting.value} (enabled: ${isEnabled})`)
+    return isEnabled
   } catch (error) {
     console.error(`Error checking notification channel status for ${channel}:`, error)
     // Default to true on error
+    console.log(`Error occurred, defaulting ${channel} notifications to enabled`)
     return true
   }
 }
@@ -67,17 +79,24 @@ export const sendNotification = async (emailTransporter, userId, type, title, me
 
     // Check if WhatsApp notifications are enabled
     if (whatsappMessage && user.phone) {
+      console.log(`📱 Checking WhatsApp notification status for message: ${title}`)
       const whatsappEnabled = await isNotificationChannelEnabled('whatsapp')
+      console.log(`📱 WhatsApp notifications enabled: ${whatsappEnabled}`)
+      
       if (whatsappEnabled) {
         try {
+          console.log(`📱 Attempting to send WhatsApp to ${user.phone}: ${whatsappMessage.substring(0, 50)}...`)
           await sendWhatsAppNotification(user.phone, whatsappMessage)
-          console.log(`📱 WhatsApp sent to ${user.phone}: ${title}`)
+          console.log(`📱 WhatsApp sent successfully to ${user.phone}: ${title}`)
         } catch (whatsappError) {
-          console.error("WhatsApp sending failed:", whatsappError.message)
+          console.error("📱 WhatsApp sending failed:", whatsappError.message)
+          console.error("Error details:", whatsappError)
         }
       } else {
         console.log(`📱 WhatsApp notification skipped (disabled): ${title}`)
       }
+    } else {
+      console.log(`📱 WhatsApp notification skipped (no message or phone): ${user.phone ? 'Has phone' : 'No phone'}, ${whatsappMessage ? 'Has message' : 'No message'}`)
     }
 
     console.log(`📝 Notification logged for user ${userId}: ${title}`)

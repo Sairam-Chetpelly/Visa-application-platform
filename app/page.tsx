@@ -95,7 +95,7 @@ const VisaFlowHomepage = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-white shadow-sm sticky top-0 z-50">
+      <header className="bg-white/10 backdrop-blur-md sticky top-0 z-50" style={{ boxShadow: "0 2px 2px 2px rgba(255, 255, 255, 0.3)" }}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-4">
             <div className="flex items-center space-x-2">
@@ -200,10 +200,10 @@ const VisaFlowHomepage = () => {
       </header>
 
       {/* Hero Section */}
-      <section className="relative py-20 bg-gradient-to-r from-blue-600 via-purple-600 to-orange-500">
+      <section className="relative pt-20 -mt-20 bg-gradient-to-r from-blue-600 via-purple-600 to-orange-500">
         <div className="absolute inset-0 bg-black opacity-20"></div>
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
+          <div className="flex   lg:grid-cols-2 gap-12 items-center">
             <div className="text-white">
               <h2 className="text-5xl font-bold mb-6 leading-tight">
                 Explore global destinations with confidence
@@ -238,9 +238,9 @@ const VisaFlowHomepage = () => {
             </div>
             <div className="hidden lg:block">
               <img 
-                src="https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=500&h=600&fit=crop" 
+                src="/hero-girl.png" 
                 alt="Traveler with backpack" 
-                className="rounded-lg shadow-2xl"
+                // className="rounded-lg shadow-2xl"
               />
             </div>
           </div>
@@ -248,7 +248,7 @@ const VisaFlowHomepage = () => {
       </section>
 
       {/* Destinations Section */}
-      <section className="py-16 bg-white">
+      <section className="py-16 bg-gray">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col lg:flex-row gap-8">
             {/* Region Filter Sidebar - Mobile Dropdown */}
@@ -270,41 +270,88 @@ const VisaFlowHomepage = () => {
             </div>
             
             {/* Region Filter Sidebar - Desktop */}
-            <div className="hidden lg:block w-64 flex-shrink-0">
+              <div className="hidden lg:block w-64 flex-shrink-0">
+              <div className="max-w-sm mx-auto sticky top-24 mt-6">
+                <div className="bg-white rounded-2xl shadow-sm border-2 border-gray-200 overflow-hidden">
+                  {availableContinents.map((continent, index) => (
+                    <div key={continent}>
+                      <div 
+                        onClick={() => setSelectedRegion(continent)}
+                        className="flex items-center justify-between px-6 py-5 hover:bg-white-50 cursor-pointer transition-colors group"
+                      >
+                        <div className="flex items-center justify-between w-full">
+                          <span 
+                            className={`text-lg font-medium transition-colors ${
+                              selectedRegion === continent 
+                                ? 'text-orange-500' 
+                                : 'text-gray-600 group-hover:text-orange-500'
+                            }`}
+                          >
+                            {continent}
+                          </span>
+                          <div className="flex items-center">
+                            <span className={`text-white-500 hover:bg-orange-500 font-medium mr-2 ${
+                                selectedRegion === continent 
+                                  ? 'text-orange-500' 
+                                  : 'text-gray-400 group-hover:text-orange-500'
+                              }`}>
+                              {continent === 'All' 
+                                ? destinations.length 
+                                : destinations.filter(d => (d.continent || d.region) === continent).length}
+                            </span>
+                            <ChevronRight 
+                              className={`w-5 h-8 transform transition duration-200 ease-out ${
+                                selectedRegion === continent 
+                                  ? 'text-orange-500' 
+                                  : 'text-gray-400 group-hover:text-orange-500 group-hover:-rotate-45'
+                              }`} 
+                            />
+                          </div>
+                        </div>
+                      </div>
+                      {index < availableContinents.length - 1 && (
+                        <div className="border-b-2 border-gray-300 mx-6"></div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+            {/* <div className="hidden lg:block w-64 flex-shrink-0">
               <div className="bg-gray-100 rounded-lg p-4 sticky top-24">
                 <h3 className="font-semibold text-gray-900 mb-4">Continents</h3>
                 <div className="space-y-2">
                   {availableContinents.map((continent) => (
                     <button
                       key={continent}
-                      onClick={() => setSelectedRegion(continent)}
+                        onClick={() => setSelectedRegion(continent)}
                       className={`flex items-center justify-between w-full px-4 py-3 text-left rounded-lg transition-colors ${
-                        selectedRegion === continent
+                              selectedRegion === continent 
                           ? 'bg-blue-100 text-blue-600 font-semibold'
                           : 'hover:bg-gray-200 text-gray-700'
-                      }`}
-                    >
+                            }`}
+                          >
                       <span>{continent}</span>
                       <span className="text-sm text-gray-500">
-                        {continent === 'All' 
-                          ? destinations.length 
-                          : destinations.filter(d => (d.continent || d.region) === continent).length}
-                      </span>
+                              {continent === 'All' 
+                                ? destinations.length 
+                                : destinations.filter(d => (d.continent || d.region) === continent).length}
+                            </span>
                     </button>
                   ))}
                 </div>
               </div>
-            </div>
+            </div> */}
 
             {/* Destinations Grid */}
             <div className="flex-1">
               <div className="mb-6">
-                <h2 className="text-2xl font-bold text-gray-900 mb-2">
+                {/* <h2 className="text-2xl font-bold text-gray-900 mb-2">
                   {selectedRegion === 'All' ? 'All Destinations' : selectedRegion}
                 </h2>
                 <p className="text-gray-600">
                   {filteredDestinations.length} destination{filteredDestinations.length !== 1 ? 's' : ''} available
-                </p>
+                </p> */}
               </div>
 
               {error && (
@@ -412,7 +459,7 @@ const VisaFlowHomepage = () => {
       </section>
 
       {/* Features Section */}
-      <section className="py-16 bg-gray-50">
+      {/* <section className="py-16 bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <h3 className="text-2xl sm:text-3xl font-bold text-center text-gray-900 mb-8 sm:mb-12">Why Choose Options Travel Services?</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8">
@@ -439,10 +486,10 @@ const VisaFlowHomepage = () => {
             </div>
           </div>
         </div>
-      </section>
+      </section> */}
 
       {/* Newsletter Section */}
-      <section className="py-12 sm:py-16 bg-blue-600 text-white">
+      {/* <section className="py-12 sm:py-16 bg-blue-600 text-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h3 className="text-2xl sm:text-3xl font-bold mb-3 sm:mb-4">Join Our Newsletter</h3>
           <p className="text-lg sm:text-xl mb-6 sm:mb-8 opacity-90">
@@ -464,26 +511,26 @@ const VisaFlowHomepage = () => {
             </Button>
           </div>
         </div>
-      </section>
+      </section> */}
 
       {/* Footer */}
-      <footer className="bg-gray-900 text-white py-10 sm:py-12">
+      <footer className="bg-white text-black py-10 sm:py-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6 sm:gap-8">
             <div className="col-span-2 md:col-span-1">
               <div className="flex items-center space-x-2 mb-4">
                 <img src="/optionslogo.png" alt="Options Travel Services" className="h-8 sm:h-10 w-auto" />
               </div>
-              <p className="text-gray-400 mb-4 text-sm sm:text-base">
+              <p className="text-black-400 mb-4 text-sm sm:text-base">
                 Travel helps companies manage payments easily.
               </p>
-              <p className="text-gray-400 text-xs sm:text-sm">
+              <p className="text-black-400 text-xs sm:text-sm">
                 Visa Application
               </p>
             </div>
             <div>
               <h4 className="font-semibold mb-3 sm:mb-4 text-sm sm:text-base">Company</h4>
-              <ul className="space-y-1 sm:space-y-2 text-gray-400 text-sm">
+              <ul className="space-y-1 sm:space-y-2 text-black-400 text-sm">
                 <li><a href="#" className="hover:text-white">About Us</a></li>
                 <li><a href="#" className="hover:text-white">Travel</a></li>
                 <li><a href="#" className="hover:text-white">Contact</a></li>
@@ -492,7 +539,7 @@ const VisaFlowHomepage = () => {
             </div>
             <div>
               <h4 className="font-semibold mb-3 sm:mb-4 text-sm sm:text-base">Services</h4>
-              <ul className="space-y-1 sm:space-y-2 text-gray-400 text-sm">
+              <ul className="space-y-1 sm:space-y-2 text-black-400 text-sm">
                 <li>Tourist Visa</li>
                 <li>Business Visa</li>
                 <li>Student Visa</li>
@@ -501,7 +548,7 @@ const VisaFlowHomepage = () => {
             </div>
             <div>
               <h4 className="font-semibold mb-3 sm:mb-4 text-sm sm:text-base">Contact</h4>
-              <ul className="space-y-1 sm:space-y-2 text-gray-400 text-sm">
+              <ul className="space-y-1 sm:space-y-2 text-black-400 text-sm">
                 <li className="flex items-center">
                   <Mail className="h-3 w-3 sm:h-4 sm:w-4 mr-2" />
                   support@visaflow.com
@@ -514,7 +561,7 @@ const VisaFlowHomepage = () => {
               </ul>
             </div>
           </div>
-          <div className="border-t border-gray-800 mt-6 sm:mt-8 pt-6 sm:pt-8 text-center text-gray-400 text-sm">
+          <div className="border-t border-black-800 mt-6 sm:mt-8 pt-6 sm:pt-8 text-center text-black-400 text-sm">
             <p>&copy; 2025 Options Travel Services. All rights reserved.</p>
           </div>
         </div>

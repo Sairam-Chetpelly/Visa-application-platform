@@ -56,6 +56,7 @@
     "cors": "latest",
     "dotenv": "latest",
     "express": "latest",
+    "framer-motion": "^12.19.1",
     "fs": "latest",
     "jsonwebtoken": "latest",
     "lucide-react": "^0.454.0",
