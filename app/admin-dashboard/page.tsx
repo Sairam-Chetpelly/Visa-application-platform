@@ -213,10 +213,26 @@ export default function AdminDashboard() {
       
       loadNotificationSettings()
     }
+    
+    // Load countries data when visa-types tab is active
+    if (activeTab === "visa-types") {
+      const loadCountries = async () => {
+        try {
+          const countriesData = await apiClient.getAdminCountries(1, 100)
+          if (countriesData && countriesData.data) {
+            setCountries(countriesData.data)
+          }
+        } catch (error) {
+          console.error("Failed to load countries:", error)
+        }
+      }
+      
+      loadCountries()
+    }
   }, [activeTab])
   
   // Handle notification setting toggle
-  const handleNotificationSettingChange = async (channel, enabled) => {
+  const handleNotificationSettingChange = async (channel: string, enabled: boolean) => {
     try {
       setUpdatingSettings(true)
       await apiClient.updateNotificationSetting(channel, enabled)
@@ -245,23 +261,6 @@ export default function AdminDashboard() {
       setUpdatingSettings(false)
     }
   }
-    
-    // Load countries data when visa-types tab is active
-    if (activeTab === "visa-types") {
-      const loadCountries = async () => {
-        try {
-          const countriesData = await apiClient.getAdminCountries(1, 100)
-          if (countriesData && countriesData.data) {
-            setCountries(countriesData.data)
-          }
-        } catch (error) {
-          console.error("Failed to load countries:", error)
-        }
-      }
-      
-      loadCountries()
-    }
-  }, [activeTab])
 
   useEffect(() => {
     const handleScroll = () => {
@@ -2200,24 +2199,6 @@ export default function AdminDashboard() {
                         disabled={updatingSettings}
                         onChange={(e) => handleNotificationSettingChange('email', e.target.checked)}
                       />
-                            setNotificationSettings(prev => ({ ...prev, email: e.target.checked }))
-                            await apiClient.updateNotificationSetting('email', e.target.checked)
-                            toast({
-                              variant: "success",
-                              title: "Setting Updated",
-                              description: `Email notifications ${e.target.checked ? 'enabled' : 'disabled'}`
-                            })
-                          } catch (err: any) {
-                            // Revert state on error
-                            setNotificationSettings(prev => ({ ...prev, email: !e.target.checked }))
-                            toast({
-                              variant: "destructive",
-                              title: "Update Failed",
-                              description: err.message
-                            })
-                          }
-                        }}
-                      />
                       <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
                     </label>
                   </div>
@@ -2236,13 +2217,6 @@ export default function AdminDashboard() {
                         disabled={updatingSettings}
                         onChange={(e) => handleNotificationSettingChange('sms', e.target.checked)}
                       />
-                              variant: "destructive",
-                              title: "Update Failed",
-                              description: err.message
-                            })
-                          }
-                        }}
-                      />
                       <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
                     </label>
                   </div>
@@ -2260,13 +2234,6 @@ export default function AdminDashboard() {
                         checked={notificationSettings.whatsapp}
                         disabled={updatingSettings}
                         onChange={(e) => handleNotificationSettingChange('whatsapp', e.target.checked)}
-                      />
-                              variant: "destructive",
-                              title: "Update Failed",
-                              description: err.message
-                            })
-                          }
-                        }}
                       />
                       <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
                     </label>
