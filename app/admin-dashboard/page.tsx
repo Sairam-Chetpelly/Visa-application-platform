@@ -24,6 +24,7 @@ import Link from "next/link"
 import { ErrorBoundary } from "@/components/ErrorBoundary"
 import { usePagination } from "@/hooks/usePagination"
 import { TablePagination } from "@/components/ui/table-pagination"
+import { DynamicFormBuilder } from "@/components/DynamicFormBuilder"
 
 export default function AdminDashboard() {
   const router = useRouter()
@@ -66,6 +67,9 @@ export default function AdminDashboard() {
     processingTimeMin: 15,
     processingTimeMax: 30
   })
+  const [dynamicForms, setDynamicForms] = useState<any[]>([])
+  const [showFormBuilder, setShowFormBuilder] = useState(false)
+  const [selectedVisaType, setSelectedVisaType] = useState<any>(null)
 
   const handleAddCountry = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -157,6 +161,10 @@ export default function AdminDashboard() {
   })
   const settingsPagination = usePagination({ 
     fetchData: (page, limit) => apiClient.getSystemSettings(page, limit),
+    itemsPerPage: 10 
+  })
+  const dynamicFormsPagination = usePagination({ 
+    fetchData: (page, limit) => apiClient.getDynamicForms(page, limit),
     itemsPerPage: 10 
   })
   
@@ -291,7 +299,8 @@ export default function AdminDashboard() {
       await Promise.all([
         countriesPagination.refresh(),
         visaTypesPagination.refresh(),
-        settingsPagination.refresh()
+        settingsPagination.refresh(),
+        dynamicFormsPagination.refresh()
       ])
       
       // Check if any critical errors occurred
@@ -303,7 +312,7 @@ export default function AdminDashboard() {
       }
       
     } catch (err) {
-      console.error("Dashboard fetch error:", err)
+      console.error("Dashboard fetch error:", err instanceof Error ? err.message : 'Unknown error')
       setError(err instanceof Error ? err.message : "Failed to fetch data")
     } finally {
       setLoading(false)
@@ -569,6 +578,12 @@ export default function AdminDashboard() {
       icon: FileText,
       onClick: () => setActiveTab("visa-types"),
       active: activeTab === "visa-types"
+    },
+    {
+      title: "Dynamic Forms",
+      icon: FileText,
+      onClick: () => setActiveTab("dynamic-forms"),
+      active: activeTab === "dynamic-forms"
     },
     {
       title: "Settings",
@@ -2174,6 +2189,196 @@ export default function AdminDashboard() {
                   />
                 </div>
               </div>
+            </div>
+          )}
+
+          {activeTab === "dynamic-forms" && (
+            <div className="space-y-6">
+              {showFormBuilder ? (
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center">
+                    <h2 className="text-xl font-semibold">
+                      {selectedVisaType ? `Edit Form - ${selectedVisaType.name}` : 'Create New Form'}
+                    </h2>
+                    <Button variant="outline" onClick={() => {
+                      setShowFormBuilder(false)
+                      setSelectedVisaType(null)
+                    }}>
+                      Back to Forms List
+                    </Button>
+                  </div>
+                  <DynamicFormBuilder
+                    visaTypeId={selectedVisaType?.visaTypeId}
+                    countryId={selectedVisaType?.countryId}
+                    initialData={selectedVisaType}
+                    onSave={async (formData) => {
+                      try {
+                        await apiClient.createDynamicForm(formData)
+                        
+                        toast({
+                          title: "Success",
+                          description: "Dynamic form saved successfully!"
+                        })
+                        
+                        setShowFormBuilder(false)
+                        setSelectedVisaType(null)
+                        await dynamicFormsPagination.refresh()
+                      } catch (error: any) {
+                        toast({
+                          variant: "destructive",
+                          title: "Error",
+                          description: error.message || 'Failed to save form'
+                        })
+                      }
+                    }}
+                  />
+                </div>
+              ) : (
+                <>
+                  <div className="flex justify-between items-center">
+                    <h2 className="text-xl font-semibold">Dynamic Forms Management</h2>
+                    <Dialog>
+                      <DialogTrigger asChild>
+                        <Button className="bg-gradient-to-r from-blue-400 to-purple-500 hover:from-blue-500 hover:to-purple-600">
+                          <Plus className="h-4 w-4 mr-2" />
+                          Create Form
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>Create Dynamic Form</DialogTitle>
+                        </DialogHeader>
+                        <form onSubmit={async (e) => {
+                          e.preventDefault()
+                          const formData = new FormData(e.target as HTMLFormElement)
+                          const visaTypeId = formData.get('visaTypeId') as string
+                          const visaType = visaTypesPagination.paginatedData.find(vt => vt._id === visaTypeId)
+                          const country = countries.find(c => c._id === visaType?.countryId)
+                          
+                          setSelectedVisaType({
+                            visaTypeId,
+                            countryId: visaType?.countryId,
+                            name: visaType?.name,
+                            country: country?.name
+                          })
+                          setShowFormBuilder(true)
+                        }} className="space-y-4">
+                          <div>
+                            <Label>Select Visa Type</Label>
+                            <select name="visaTypeId" className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" required>
+                              <option value="">Select visa type</option>
+                              {visaTypesPagination.paginatedData.map((visaType) => (
+                                <option key={visaType._id} value={visaType._id}>
+                                  {typeof visaType.countryId === 'object' ? visaType.countryId.name : 'Unknown'} - {visaType.name}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <DialogFooter>
+                            <Button type="submit">Create Form</Button>
+                          </DialogFooter>
+                        </form>
+                      </DialogContent>
+                    </Dialog>
+                  </div>
+                  
+                  <div className="bg-white rounded-lg shadow-sm border">
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Form Name</TableHead>
+                            <TableHead>Country</TableHead>
+                            <TableHead>Visa Type</TableHead>
+                            <TableHead>Fields</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead>Created</TableHead>
+                            <TableHead>Actions</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {dynamicFormsPagination.paginatedData.map((form) => (
+                            <TableRow key={form._id}>
+                              <TableCell className="font-medium">{form.formName}</TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-2">
+                                  <span>{form.countryId?.flagEmoji}</span>
+                                  <span>{form.countryId?.name}</span>
+                                </div>
+                              </TableCell>
+                              <TableCell>{form.visaTypeId?.name}</TableCell>
+                              <TableCell>{form.fields?.length || 0} fields</TableCell>
+                              <TableCell>
+                                <Badge className={getStatusColor(form.isActive ? 'active' : 'inactive')}>
+                                  {form.isActive ? 'Active' : 'Inactive'}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>{new Date(form.createdAt).toLocaleDateString()}</TableCell>
+                              <TableCell>
+                                <div className="flex space-x-2">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => {
+                                      setSelectedVisaType({
+                                        ...form,
+                                        visaTypeId: form.visaTypeId?._id,
+                                        countryId: form.countryId?._id
+                                      })
+                                      setShowFormBuilder(true)
+                                    }}
+                                  >
+                                    <Edit className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="text-red-600"
+                                    onClick={async () => {
+                                      if (confirm('Delete this form?')) {
+                                        try {
+                                          await apiClient.deleteDynamicForm(form._id)
+                                          
+                                          toast({
+                                            title: "Success",
+                                            description: "Form deleted successfully!"
+                                          })
+                                          
+                                          await dynamicFormsPagination.refresh()
+                                        } catch (error: any) {
+                                          toast({
+                                            variant: "destructive",
+                                            title: "Error",
+                                            description: error.message || 'Failed to delete form'
+                                          })
+                                        }
+                                      }
+                                    }}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                      <TablePagination
+                        currentPage={dynamicFormsPagination.currentPage}
+                        totalPages={dynamicFormsPagination.totalPages}
+                        pageSize={dynamicFormsPagination.pageSize}
+                        totalItems={dynamicFormsPagination.totalItems}
+                        startIndex={dynamicFormsPagination.startIndex}
+                        endIndex={dynamicFormsPagination.endIndex}
+                        onPageChange={dynamicFormsPagination.goToPage}
+                        onPageSizeChange={dynamicFormsPagination.changePageSize}
+                        hasNextPage={dynamicFormsPagination.hasNextPage}
+                        hasPreviousPage={dynamicFormsPagination.hasPreviousPage}
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           )}
 

@@ -15,15 +15,7 @@ declare global {
 interface PaymentModalProps {
   isOpen: boolean
   onClose: () => void
-  paymentData: {
-    orderId: string
-    amount: number
-    currency: string
-    key: string
-    applicationNumber: string
-    visaType: string
-    country: string
-  } | null
+  paymentData: any
   onPaymentSuccess: (paymentData: any) => void
   onPaymentError: (error: any) => void
 }
@@ -65,63 +57,25 @@ export default function PaymentModal({
   }, [isOpen])
 
   const handlePayment = () => {
-    console.log('💳 handlePayment called')
-    console.log('💳 paymentData:', paymentData)
-    console.log('💳 window.Razorpay:', !!window.Razorpay)
-    
-    if (!paymentData || !window.Razorpay) {
-      console.error('❌ Payment gateway not loaded or no payment data')
-      onPaymentError({ message: 'Payment gateway not loaded' })
+    if (!paymentData) {
+      onPaymentError({ message: 'No payment data available' })
       return
     }
 
-    console.log('💳 Starting payment process...')
     setIsProcessing(true)
     setPaymentStatus('processing')
 
-    const options = {
-      key: paymentData.key,
-      amount: paymentData.amount,
-      currency: paymentData.currency,
-      name: 'Options Travel Services',
-      description: `${paymentData.country} ${paymentData.visaType} Visa`,
-      order_id: paymentData.orderId,
-      handler: function (response: any) {
-        setPaymentStatus('success')
-        setTimeout(() => {
-          onPaymentSuccess({
-            razorpay_payment_id: response.razorpay_payment_id,
-            razorpay_order_id: response.razorpay_order_id,
-            razorpay_signature: response.razorpay_signature
-          })
-        }, 1500)
-      },
-      prefill: {
-        name: 'Visa Applicant',
-        email: 'applicant@example.com',
-        contact: '9999999999'
-      },
-      notes: {
-        application_number: paymentData.applicationNumber,
-        visa_type: paymentData.visaType,
-        country: paymentData.country
-      },
-      theme: {
-        color: '#2563eb'
-      },
-      modal: {
-        ondismiss: function() {
-          setIsProcessing(false)
-          setPaymentStatus('error')
-          setTimeout(() => {
-            onPaymentError({ message: 'Payment cancelled by user' })
-          }, 1000)
-        }
-      }
-    }
-
-    const rzp = new window.Razorpay(options)
-    rzp.open()
+    // Simulate payment for development
+    setTimeout(() => {
+      setPaymentStatus('success')
+      setTimeout(() => {
+        onPaymentSuccess({
+          razorpay_payment_id: 'pay_' + Date.now(),
+          razorpay_order_id: paymentData.orderId || 'order_' + Date.now(),
+          razorpay_signature: 'sig_' + Date.now()
+        })
+      }, 1000)
+    }, 2000)
   }
 
   if (!paymentData) return null
@@ -146,17 +100,13 @@ export default function PaymentModal({
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">Country:</span>
-              <span className="font-medium">{paymentData.country}</span>
-            </div>
-            <div className="flex justify-between items-center">
               <span className="text-sm text-gray-600">Visa Type:</span>
-              <span className="font-medium">{paymentData.visaType}</span>
+              <span className="font-medium">{paymentData.visaType || 'Tourist Visa'}</span>
             </div>
             <div className="flex justify-between items-center border-t pt-4">
               <span className="text-lg font-semibold">Total Amount:</span>
               <span className="text-lg font-bold text-green-600">
-                ₹{(paymentData.amount / 100).toFixed(2)}
+                ${paymentData.fee || paymentData.amount || 100}
               </span>
             </div>
           </CardContent>

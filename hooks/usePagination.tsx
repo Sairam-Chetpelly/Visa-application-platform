@@ -30,23 +30,48 @@ export function usePagination({ fetchData, itemsPerPage = 10 }: UsePaginationPro
   const loadData = async (page: number, limit: number) => {
     setLoading(true)
     try {
-      const response: PaginationResponse = await fetchData(page, limit)
-      if (response.data && response.pagination) {
+      const response: any = await fetchData(page, limit)
+      if (response.data) {
+        // Handle response with data property
         setData(response.data)
-        setPagination(response.pagination)
-      } else {
-        // Fallback for non-paginated responses
-        setData(Array.isArray(response) ? response : [])
+        if (response.pagination) {
+          setPagination(response.pagination)
+        } else {
+          // Create pagination for data array
+          setPagination({
+            page: 1,
+            limit: response.data.length,
+            total: response.data.length,
+            pages: 1
+          })
+        }
+      } else if (Array.isArray(response)) {
+        // Handle direct array response
+        setData(response)
         setPagination({
           page: 1,
-          limit: Array.isArray(response) ? response.length : 0,
-          total: Array.isArray(response) ? response.length : 0,
+          limit: response.length,
+          total: response.length,
           pages: 1
+        })
+      } else {
+        setData([])
+        setPagination({
+          page: 1,
+          limit: 0,
+          total: 0,
+          pages: 0
         })
       }
     } catch (error) {
       console.error('Pagination error:', error)
       setData([])
+      setPagination({
+        page: 1,
+        limit: 0,
+        total: 0,
+        pages: 0
+      })
     } finally {
       setLoading(false)
     }

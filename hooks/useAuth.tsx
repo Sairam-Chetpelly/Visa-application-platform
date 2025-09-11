@@ -115,6 +115,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(true)
       const response = await apiClient.login({ email, password })
       setUser(response.user)
+      if (typeof window !== "undefined") {
+        localStorage.setItem("user", JSON.stringify(response.user))
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed")
       throw err
@@ -139,8 +142,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const handleLogout = () => {
     if (typeof window !== "undefined") {
       localStorage.removeItem("auth_token")
+      localStorage.removeItem("user")
     }
-    console.log("logout");
     setUser(null)
     setError(null)
   }

@@ -1,5 +1,7 @@
-✅ Razorpay payment gateway configured
-✅ Email service configured
+
+> visa-management-system@1.0.0 server
+> node scripts/backend-server.js
+
 🚀 Server running on port 3001
 🔍 Health check: http://localhost:3001/api/health
 ✅ MongoDB connected successfully!

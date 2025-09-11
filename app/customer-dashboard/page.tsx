@@ -36,7 +36,12 @@ export default function CustomerDashboard() {
   const [scrolled, setScrolled] = useState(false)
 
   const applicationsPagination = usePagination({ 
-    fetchData: (page, limit) => apiClient.getApplications(page, limit),
+    fetchData: async (page, limit) => {
+      console.log('Fetching applications...', { page, limit })
+      const result = await apiClient.getApplications(page, limit)
+      console.log('Applications result:', result)
+      return result
+    },
     itemsPerPage: 5 
   })
   const paymentsPagination = usePagination({ 
@@ -71,6 +76,13 @@ export default function CustomerDashboard() {
     }
   }, [user, router, initialized])
 
+  // Refresh applications when switching to status section
+  useEffect(() => {
+    if (activeSection === 'status' && user) {
+      applicationsPagination.refresh()
+    }
+  }, [activeSection, user])
+
   useEffect(() => {
     const handleScroll = () => {
       setScrolled(window.scrollY > 10)
@@ -84,6 +96,9 @@ export default function CustomerDashboard() {
       setLoading(true)
       const statsData = await apiClient.getDashboardStats()
       setStats(statsData)
+      
+      // Refresh applications data
+      applicationsPagination.refresh()
     } catch (error: any) {
       setError(error.message || "Failed to fetch data")
     } finally {
@@ -547,7 +562,10 @@ export default function CustomerDashboard() {
         return (
           <div className="space-y-6">
             <div className="flex justify-between items-center">
-              <h2 className="text-xl font-semibold">My Application Status</h2>
+              <div>
+                <h2 className="text-xl font-semibold">My Application Status</h2>
+                <p className="text-sm text-gray-600">Total Applications: {applicationsPagination.paginatedData.length}</p>
+              </div>
               <Link href="/new-application">
                 <Button className="bg-gradient-to-r from-blue-400 to-purple-500 hover:from-blue-500 hover:to-purple-600">
                   <Plus className="h-4 w-4 mr-2" />

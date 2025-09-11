@@ -44,7 +44,7 @@ class ApiClient {
     }
 
     try {
-      console.log(`API Request: ${options.method || 'GET'} ${url}`)
+      console.log(`API Request: ${options.method || 'GET'} ${url.replace(/([?&])(password|token|key)=[^&]*/gi, '$1$2=***')}`)
       
       const response = await fetch(url, {
         ...options,
@@ -67,12 +67,12 @@ class ApiClient {
           }
         }
         
-        console.error(`API Error: ${options.method || 'GET'} ${url} - ${errorMessage}`)
+        console.error(`API Error: ${options.method || 'GET'} ${url.replace(/([?&])(password|token|key)=[^&]*/gi, '$1$2=***')} - ${errorMessage}`)
         throw new Error(errorMessage)
       }
 
       const data = await response.json()
-      console.log(`API Success: ${options.method || 'GET'} ${url}`, data)
+      console.log(`API Success: ${options.method || 'GET'} ${url.replace(/([?&])(password|token|key)=[^&]*/gi, '$1$2=***')}`)
       return data
     } catch (error) {
       if (error instanceof TypeError && error.message.includes('fetch')) {
@@ -680,6 +680,77 @@ class ApiClient {
     })
     return this.request(`/export/users/csv?${queryParams.toString()}`)
   }
+
+  // ===== DYNAMIC FORMS ENDPOINTS =====
+
+  // Get all dynamic forms (Admin only)
+  async getDynamicForms(page = 1, limit = 10) {
+    return this.request(`/admin/dynamic-forms?page=${page}&limit=${limit}`)
+  }
+
+  // Create dynamic form (Admin only)
+  async createDynamicForm(formData: any) {
+    return this.request("/admin/dynamic-forms", {
+      method: "POST",
+      body: JSON.stringify(formData),
+    })
+  }
+
+  // Update dynamic form (Admin only)
+  async updateDynamicForm(formId: string, formData: any) {
+    return this.request(`/admin/dynamic-forms/${formId}`, {
+      method: "PUT",
+      body: JSON.stringify(formData),
+    })
+  }
+
+  // Delete dynamic form (Admin only)
+  async deleteDynamicForm(formId: string) {
+    return this.request(`/admin/dynamic-forms/${formId}`, {
+      method: "DELETE",
+    })
+  }
+
+  // Get form by visa type (Public)
+  async getFormByVisaType(visaTypeId: string) {
+    return this.request(`/dynamic-forms/visa-type/${visaTypeId}`)
+  }
+
+  // Get dynamic form by country and visa type names (Public)
+  async getDynamicForm(country: string, visaType: string) {
+    const encodedCountry = encodeURIComponent(country)
+    const encodedVisaType = encodeURIComponent(visaType)
+    return this.request(`/dynamic-forms?country=${encodedCountry}&visaType=${encodedVisaType}`)
+  }
+
+  // Submit dynamic form (Authenticated users)
+  async submitDynamicForm(submissionData: {
+    formId: string
+    applicationId?: string
+    formData: any
+  }) {
+    return this.request("/dynamic-forms/submit", {
+      method: "POST",
+      body: JSON.stringify(submissionData),
+    })
+  }
+
+  // Get form submission (Authenticated users)
+  async getFormSubmission(applicationId: string) {
+    return this.request(`/dynamic-forms/submission/${applicationId}`)
+  }
+
+  // Form Templates
+  async getFormTemplates() {
+    return this.request("/admin/form-templates")
+  }
+
+  async createFormTemplate(templateData: any) {
+    return this.request("/admin/form-templates", {
+      method: "POST",
+      body: JSON.stringify(templateData),
+    })
+  }
 }
 
 export const apiClient = new ApiClient(API_BASE_URL)
@@ -968,4 +1039,64 @@ export interface ApplicationDocumentItem {
   fileSize: number
   mimeType: string
   createdAt: string
+}
+
+// Dynamic Form interfaces
+export interface DynamicFormField {
+  id: string
+  type: 'text' | 'email' | 'number' | 'tel' | 'date' | 'select' | 'radio' | 'checkbox' | 'textarea' | 'file'
+  label: string
+  placeholder?: string
+  required: boolean
+  options?: string[]
+  validation?: {
+    min?: number
+    max?: number
+    pattern?: string
+    message?: string
+  }
+  conditional?: {
+    dependsOn?: string
+    value?: string
+    operator?: 'equals' | 'not_equals' | 'contains'
+  }
+  order: number
+}
+
+export interface DynamicVisaForm {
+  _id: string
+  visaTypeId: string | { _id: string; name: string; description: string; fee: number }
+  countryId: string | { _id: string; name: string; flagEmoji: string }
+  formName: string
+  description?: string
+  fields: DynamicFormField[]
+  isActive: boolean
+  createdBy: string
+  version: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface DynamicFormSubmission {
+  _id: string
+  applicationId: string
+  formId: string
+  customerId: string
+  formData: Record<string, any>
+  submittedAt: string
+  status: 'draft' | 'submitted' | 'approved' | 'rejected'
+  createdAt: string
+  updatedAt: string
+}
+
+export interface FormTemplate {
+  _id: string
+  name: string
+  description?: string
+  category: 'tourist' | 'business' | 'student' | 'work' | 'transit' | 'medical'
+  fields: DynamicFormField[]
+  isPublic: boolean
+  createdBy: string
+  createdAt: string
+  updatedAt: string
 }

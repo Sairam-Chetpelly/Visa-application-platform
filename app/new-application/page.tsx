@@ -181,21 +181,7 @@ function NewApplicationContent() {
                   </div>
                 </div>
 
-                <div>
-                  <h4 className="font-semibold text-gray-900 mb-3">Available Visa Types</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {selectedCountry.visa_types?.map((type) => (
-                      <div key={type.id} className="p-4 border rounded-lg hover:bg-gray-50">
-                        <div className="flex justify-between items-start mb-2">
-                          <h5 className="font-medium">{type.name}</h5>
-                          <span className="text-sm font-semibold text-green-600">${type.fee}</span>
-                        </div>
-                        <p className="text-sm text-gray-600 mb-2">{type.description}</p>
-                        <p className="text-xs text-gray-500">Processing: {type.processing_time_days || type.processingTimeDays} days</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+
 
                 <div>
                   <h4 className="font-semibold text-gray-900 mb-3">Required Documents</h4>
@@ -217,15 +203,37 @@ function NewApplicationContent() {
                   </ul>
                 </div>
 
+                <div>
+                  <h4 className="font-semibold text-gray-900 mb-3">Choose Application Type</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                    {selectedCountry.visa_types?.map((type) => (
+                      <div key={type.id} className="p-4 border rounded-lg hover:bg-gray-50">
+                        <div className="flex justify-between items-start mb-3">
+                          <h5 className="font-medium">{type.name}</h5>
+                          <span className="text-sm font-semibold text-green-600">${type.fee}</span>
+                        </div>
+                        <p className="text-sm text-gray-600 mb-3">{type.description}</p>
+                        <div className="flex space-x-2">
+                          <Link href={`/dynamic-application?visaType=${type.id}&country=${selectedCountry.id}`}>
+                            <Button size="sm" className="bg-blue-600 hover:bg-blue-700">
+                              Dynamic Form
+                            </Button>
+                          </Link>
+                          <Link href={`/application-form?country=${selectedCountry.id}&visaType=${type.id}`}>
+                            <Button size="sm" variant="outline">
+                              Standard Form
+                            </Button>
+                          </Link>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
                 <div className="flex space-x-4">
                   <Button onClick={() => setSelectedCountry(null)} variant="outline">
                     Choose Different Country
                   </Button>
-                  <Link href={`/application-form?country=${selectedCountry.id}`}>
-                    <Button className="bg-blue-600 hover:bg-blue-700">
-                      Start Application
-                    </Button>
-                  </Link>
                 </div>
               </CardContent>
             </Card>

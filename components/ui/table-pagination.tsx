@@ -1,7 +1,5 @@
-import React from 'react'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Button } from '@/components/ui/button'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { Button } from "@/components/ui/button"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 interface TablePaginationProps {
   currentPage: number
@@ -28,68 +26,62 @@ export function TablePagination({
   hasNextPage,
   hasPreviousPage
 }: TablePaginationProps) {
-  const pageOptions = Array.from({ length: totalPages }, (_, i) => i + 1)
-
   return (
-    <div className="flex items-center justify-between px-2 py-4">
-      <div className="flex items-center space-x-2">
-        <p className="text-sm text-gray-700">
-          Showing {startIndex} to {endIndex} of {totalItems} entries
-        </p>
-      </div>
-      
-      <div className="flex items-center space-x-6">
+    <div className="flex items-center justify-between px-2">
+      <div className="flex items-center space-x-6 lg:space-x-8">
         <div className="flex items-center space-x-2">
-          <p className="text-sm text-gray-700">Rows per page:</p>
-          <Select value={pageSize.toString()} onValueChange={(value) => onPageSizeChange(Number(value))}>
-            <SelectTrigger className="w-20">
-              <SelectValue />
+          <p className="text-sm font-medium">Rows per page</p>
+          <Select
+            value={`${pageSize}`}
+            onValueChange={(value) => onPageSizeChange(Number(value))}
+          >
+            <SelectTrigger className="h-8 w-[70px]">
+              <SelectValue placeholder={pageSize} />
             </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="5">5</SelectItem>
-              <SelectItem value="10">10</SelectItem>
-              <SelectItem value="20">20</SelectItem>
-              <SelectItem value="50">50</SelectItem>
+            <SelectContent side="top">
+              {[5, 10, 20, 30, 40, 50].map((size) => (
+                <SelectItem key={size} value={`${size}`}>
+                  {size}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
-
+        <div className="flex w-[100px] items-center justify-center text-sm font-medium">
+          Page {currentPage} of {totalPages}
+        </div>
         <div className="flex items-center space-x-2">
           <Button
             variant="outline"
-            size="sm"
+            className="h-8 w-8 p-0"
+            onClick={() => onPageChange(1)}
+            disabled={!hasPreviousPage}
+          >
+            First
+          </Button>
+          <Button
+            variant="outline"
+            className="h-8 w-8 p-0"
             onClick={() => onPageChange(currentPage - 1)}
             disabled={!hasPreviousPage}
           >
-            <ChevronLeft className="h-4 w-4" />
             Previous
           </Button>
-
-          <div className="flex items-center space-x-2">
-            <span className="text-sm text-gray-700">Page</span>
-            <Select value={currentPage.toString()} onValueChange={(value) => onPageChange(Number(value))}>
-              <SelectTrigger className="w-20">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {pageOptions.map((page) => (
-                  <SelectItem key={page} value={page.toString()}>
-                    {page}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <span className="text-sm text-gray-700">of {totalPages}</span>
-          </div>
-
           <Button
             variant="outline"
-            size="sm"
+            className="h-8 w-8 p-0"
             onClick={() => onPageChange(currentPage + 1)}
             disabled={!hasNextPage}
           >
             Next
-            <ChevronRight className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="outline"
+            className="h-8 w-8 p-0"
+            onClick={() => onPageChange(totalPages)}
+            disabled={!hasNextPage}
+          >
+            Last
           </Button>
         </div>
       </div>

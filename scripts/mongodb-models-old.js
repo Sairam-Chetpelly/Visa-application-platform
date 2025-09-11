@@ -1,4 +1,4 @@
-// Clean MongoDB Models - Essential Only
+// MongoDB Models using Mongoose
 import mongoose from 'mongoose'
 
 // User Schema
@@ -16,14 +16,18 @@ const userSchema = new mongoose.Schema({
 const customerProfileSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   dateOfBirth: Date,
+  placeOfBirth: String,
   nationality: String,
   gender: { type: String, enum: ['male', 'female', 'other'] },
+  maritalStatus: { type: String, enum: ['single', 'married', 'divorced', 'widowed'] },
   address: String,
   city: String,
+  postalCode: String,
   country: String,
   passportNumber: String,
   passportIssueDate: Date,
-  passportExpiryDate: Date
+  passportExpiryDate: Date,
+  passportIssuePlace: String
 }, { timestamps: true })
 
 // Employee Profile Schema
@@ -31,7 +35,9 @@ const employeeProfileSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   employeeId: { type: String, required: true, unique: true },
   role: { type: String, required: true },
+  department: String,
   hireDate: Date,
+  salary: Number,
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
 }, { timestamps: true })
 
@@ -57,7 +63,7 @@ const visaTypeSchema = new mongoose.Schema({
   isActive: { type: Boolean, default: true }
 }, { timestamps: true })
 
-// Visa Application Schema - Simplified for Dynamic Forms
+// Visa Application Schema
 const visaApplicationSchema = new mongoose.Schema({
   applicationNumber: { type: String, required: true, unique: true },
   customerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
@@ -65,16 +71,59 @@ const visaApplicationSchema = new mongoose.Schema({
   visaTypeId: { type: mongoose.Schema.Types.ObjectId, ref: 'VisaType', required: true },
   status: { 
     type: String, 
-    enum: ['draft', 'submitted', 'under_review', 'approved', 'rejected'], 
+    enum: ['draft', 'submitted', 'under_review', 'approved', 'rejected', 'resent'], 
     default: 'draft' 
   },
+  priority: { type: String, enum: ['low', 'normal', 'high'], default: 'normal' },
   assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   
-  // Dynamic form data will be stored in DynamicFormSubmission
+  // Travel Information
+  purposeOfVisit: String,
+  intendedArrivalDate: Date,
+  intendedDepartureDate: Date,
+  accommodationDetails: String,
+  
+  // Employment Information
+  occupation: String,
+  employer: String,
+  employerAddress: String,
+  monthlyIncome: Number,
+  
+  // Additional Information
+  previousVisits: String,
+  criminalRecord: { type: Boolean, default: false },
+  medicalConditions: String,
+  additionalInfo: String,
+  
+  // Application tracking
   submittedAt: Date,
   reviewedAt: Date,
   approvedAt: Date,
-  rejectionReason: String
+  rejectionReason: String,
+  resendReason: String
+}, { timestamps: true })
+
+// Application Document Schema
+const applicationDocumentSchema = new mongoose.Schema({
+  applicationId: { type: mongoose.Schema.Types.ObjectId, ref: 'VisaApplication', required: true },
+  documentType: { 
+    type: String, 
+    enum: ['passport', 'photo', 'financial_docs', 'employment_letter', 'travel_itinerary', 'other'], 
+    required: true 
+  },
+  fileName: { type: String, required: true },
+  filePath: { type: String, required: true },
+  fileSize: Number,
+  mimeType: String
+}, { timestamps: true })
+
+// Application Status History Schema
+const applicationStatusHistorySchema = new mongoose.Schema({
+  applicationId: { type: mongoose.Schema.Types.ObjectId, ref: 'VisaApplication', required: true },
+  oldStatus: String,
+  newStatus: { type: String, required: true },
+  changedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  comments: String
 }, { timestamps: true })
 
 // Notification Schema
@@ -85,6 +134,17 @@ const notificationSchema = new mongoose.Schema({
   title: { type: String, required: true },
   message: { type: String, required: true },
   isRead: { type: Boolean, default: false }
+}, { timestamps: true })
+
+// Payment Order Schema
+const paymentOrderSchema = new mongoose.Schema({
+  applicationId: { type: mongoose.Schema.Types.ObjectId, ref: 'VisaApplication', required: true },
+  razorpayOrderId: { type: String, required: true, unique: true },
+  razorpayPaymentId: String,
+  amount: { type: Number, required: true },
+  currency: { type: String, default: 'INR' },
+  status: { type: String, enum: ['created', 'paid', 'failed', 'cancelled'], default: 'created' },
+  verifiedAt: Date
 }, { timestamps: true })
 
 // System Settings Schema
@@ -102,5 +162,8 @@ export const EmployeeProfile = mongoose.model('EmployeeProfile', employeeProfile
 export const Country = mongoose.model('Country', countrySchema)
 export const VisaType = mongoose.model('VisaType', visaTypeSchema)
 export const VisaApplication = mongoose.model('VisaApplication', visaApplicationSchema)
+export const ApplicationDocument = mongoose.model('ApplicationDocument', applicationDocumentSchema)
+export const ApplicationStatusHistory = mongoose.model('ApplicationStatusHistory', applicationStatusHistorySchema)
 export const Notification = mongoose.model('Notification', notificationSchema)
+export const PaymentOrder = mongoose.model('PaymentOrder', paymentOrderSchema)
 export const SystemSettings = mongoose.model('SystemSettings', systemSettingsSchema)
