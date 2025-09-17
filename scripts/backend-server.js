@@ -334,14 +334,17 @@ app.post("/api/applications/:id/create-payment", authenticateToken, async (req, 
       return res.status(400).json({ error: "Visa type not found" })
     }
 
-    // Show payment gateway with fee
+    // Create Razorpay order
+    const orderId = `order_${Date.now()}_${application._id.toString().slice(-6)}`
+    
     res.json({ 
       paymentRequired: true,
       amount: visaType.fee,
       currency: "USD",
       applicationNumber: application.applicationNumber,
       visaType: visaType.name,
-      fee: visaType.fee
+      fee: visaType.fee,
+      razorpayOrderId: orderId
     })
   } catch (error) {
     console.error("Error creating payment order:", error)

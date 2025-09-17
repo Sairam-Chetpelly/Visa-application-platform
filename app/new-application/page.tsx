@@ -213,15 +213,10 @@ function NewApplicationContent() {
                           <span className="text-sm font-semibold text-green-600">${type.fee}</span>
                         </div>
                         <p className="text-sm text-gray-600 mb-3">{type.description}</p>
-                        <div className="flex space-x-2">
+                        <div className="flex justify-center">
                           <Link href={`/dynamic-application?visaType=${type.id}&country=${selectedCountry.id}`}>
-                            <Button size="sm" className="bg-blue-600 hover:bg-blue-700">
-                              Dynamic Form
-                            </Button>
-                          </Link>
-                          <Link href={`/application-form?country=${selectedCountry.id}&visaType=${type.id}`}>
-                            <Button size="sm" variant="outline">
-                              Standard Form
+                            <Button size="sm" className="bg-blue-600 hover:bg-blue-700 w-full">
+                              Start Application
                             </Button>
                           </Link>
                         </div>

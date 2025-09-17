@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { DynamicFormRenderer } from '@/components/DynamicFormRenderer'
+import PaymentModal from '@/components/PaymentModal'
 import { ChevronLeft, Loader2, AlertCircle, CheckCircle } from 'lucide-react'
 
 export default function DynamicApplicationPage() {
@@ -25,6 +26,9 @@ export default function DynamicApplicationPage() {
   const [countryId, setCountryId] = useState<string | null>(null)
   const [visaTypeInfo, setVisaTypeInfo] = useState<any>(null)
   const [countryInfo, setCountryInfo] = useState<any>(null)
+  const [existingApplicationId, setExistingApplicationId] = useState<string | null>(null)
+  const [showPaymentModal, setShowPaymentModal] = useState(false)
+  const [paymentData, setPaymentData] = useState<any>(null)
 
   useEffect(() => {
     if (!initialized) return
@@ -37,6 +41,7 @@ export default function DynamicApplicationPage() {
     // Get parameters from URL
     const visaType = searchParams.get('visaType')
     const country = searchParams.get('country')
+    const existingAppId = searchParams.get('applicationId')
     
     if (!visaType) {
       toast({
@@ -50,11 +55,12 @@ export default function DynamicApplicationPage() {
 
     setVisaTypeId(visaType)
     setCountryId(country)
+    setExistingApplicationId(existingAppId)
     
-    initializeApplication(visaType, country)
+    initializeApplication(visaType, country, existingAppId)
   }, [initialized, user, searchParams])
 
-  const initializeApplication = async (visaTypeId: string, countryId: string | null) => {
+  const initializeApplication = async (visaTypeId: string, countryId: string | null, existingAppId: string | null = null) => {
     try {
       setLoading(true)
       
@@ -65,11 +71,11 @@ export default function DynamicApplicationPage() {
       let selectedVisaType = null
       
       for (const country of countries) {
-        if (countryId && country.id === countryId) {
+        if (countryId && country.id.toString() === countryId.toString()) {
           selectedCountry = country
         }
         
-        const visaType = country.visa_types?.find((vt: any) => vt.id === visaTypeId)
+        const visaType = country.visa_types?.find((vt: any) => vt.id.toString() === visaTypeId.toString())
         if (visaType) {
           selectedVisaType = visaType
           if (!selectedCountry) {
@@ -79,26 +85,25 @@ export default function DynamicApplicationPage() {
       }
       
       if (!selectedVisaType || !selectedCountry) {
-        throw new Error('Invalid visa type or country')
+        throw new Error('Invalid visa type or country selection')
       }
       
       setVisaTypeInfo(selectedVisaType)
       setCountryInfo(selectedCountry)
       
-      // Create a draft application
-      const applicationData = {
-        countryId: selectedCountry.id,
-        visaTypeId: selectedVisaType.id,
-        personalInfo: {},
-        contactInfo: {},
-        passportInfo: {},
-        travelInfo: {},
-        employmentInfo: {},
-        additionalInfo: {}
+      // Use existing application ID or create a new one
+      if (existingAppId) {
+        setApplicationId(existingAppId)
+      } else {
+        // Create a draft application with minimal required data
+        const applicationData = {
+          countryId: selectedCountry.id,
+          visaTypeId: selectedVisaType.id
+        }
+        
+        const response = await apiClient.createApplication(applicationData)
+        setApplicationId(response.applicationId)
       }
-      
-      const response = await apiClient.createApplication(applicationData)
-      setApplicationId(response.applicationId)
       
     } catch (error: any) {
       console.error('Error initializing application:', error)
@@ -114,6 +119,8 @@ export default function DynamicApplicationPage() {
   }
 
   const handleFormSubmit = async (formData: any) => {
+    console.log('📝 Form submission started', { applicationId, formData })
+    
     try {
       setSubmitting(true)
       
@@ -121,51 +128,49 @@ export default function DynamicApplicationPage() {
         throw new Error('No application ID found')
       }
       
+      console.log('📝 Submitting dynamic form...')
       // Submit the dynamic form with application ID
       await apiClient.submitDynamicForm({
-        ...formData,
-        applicationId
+        formId: formData.formId,
+        applicationId,
+        formData: formData.formData
       })
       
+      console.log('📝 Submitting application...')
+      // Submit the application to change status from draft to submitted
+      await apiClient.submitApplication(applicationId)
+      
+      console.log('💳 Creating payment order...')
       // Create payment order
       const paymentResponse = await apiClient.createPaymentOrder(applicationId)
+      console.log('💳 Payment response:', paymentResponse)
       
       if (paymentResponse.paymentRequired) {
-        // Show payment gateway
-        const confirmed = window.confirm(
-          `Payment Required: $${paymentResponse.fee}\n\nVisa Type: ${paymentResponse.visaType}\nAmount: $${paymentResponse.fee}\n\nClick OK to proceed with payment, or Cancel to save as draft.`
-        )
-        
-        if (confirmed) {
-          // Simulate payment success and submit application
-          await apiClient.submitApplication(applicationId)
-          
-          toast({
-            title: "Success",
-            description: "Payment successful! Your visa application has been submitted."
-          })
-        } else {
-          toast({
-            title: "Saved as Draft",
-            description: "Your application has been saved. You can complete payment later."
-          })
-        }
+        console.log('💳 Payment required, showing modal')
+        console.log('💳 Payment data:', paymentResponse)
+        // Show payment modal
+        setPaymentData(paymentResponse)
+        setShowPaymentModal(true)
+        console.log('💳 Modal state set to true')
       } else {
+        console.log('✅ No payment required')
+        // No payment required - application already submitted above
         toast({
-          title: "Success",
-          description: "Your visa application has been submitted successfully!"
+          title: "🎉 Application Submitted Successfully!",
+          description: "Your visa application is now under review. You'll receive updates via email and SMS."
         })
+        
+        setTimeout(() => {
+          router.push('/customer-dashboard')
+        }, 2000)
       }
       
-      // Redirect to dashboard
-      router.push('/customer-dashboard')
-      
     } catch (error: any) {
-      console.error('Error submitting form:', error)
+      console.error('❌ Form submission error:', error)
       toast({
         variant: "destructive",
-        title: "Submission Error",
-        description: error.message || "Failed to submit application"
+        title: "❌ Submission Error",
+        description: error.message || "Failed to submit application. Please try again."
       })
     } finally {
       setSubmitting(false)
@@ -252,8 +257,8 @@ export default function DynamicApplicationPage() {
                       Processing: {visaTypeInfo.processingTimeDays || visaTypeInfo.processing_time_days} days
                     </Badge>
                     {applicationId && (
-                      <Badge variant="secondary">
-                        Draft Application
+                      <Badge variant={existingApplicationId ? "default" : "secondary"}>
+                        {existingApplicationId ? "Continuing Draft" : "New Application"}
                       </Badge>
                     )}
                   </div>
@@ -271,6 +276,7 @@ export default function DynamicApplicationPage() {
             onSubmit={handleFormSubmit}
             countryName={countryInfo?.name}
             visaTypeName={visaTypeInfo?.name}
+            isExistingApplication={!!existingApplicationId}
           />
         )}
 
@@ -313,6 +319,44 @@ export default function DynamicApplicationPage() {
           </svg>
         </a>
       </div>
+
+      {/* Payment Modal */}
+      {/* Debug Payment Modal State */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="fixed top-4 right-4 bg-black text-white p-2 text-xs z-50">
+          Modal Open: {showPaymentModal ? 'YES' : 'NO'}<br/>
+          Payment Data: {paymentData ? 'YES' : 'NO'}
+        </div>
+      )}
+      
+      <PaymentModal
+        isOpen={showPaymentModal}
+        onClose={() => {
+          console.log('💳 Closing payment modal')
+          setShowPaymentModal(false)
+        }}
+        paymentData={paymentData}
+        onPaymentSuccess={(paymentResponse) => {
+          console.log('💳 Payment success:', paymentResponse)
+          setShowPaymentModal(false)
+          toast({
+            title: "🎉 Payment Successful!",
+            description: `Your ${countryInfo?.name} visa application has been submitted and is now under review.`
+          })
+          setTimeout(() => {
+            router.push('/customer-dashboard')
+          }, 2000)
+        }}
+        onPaymentError={(error) => {
+          console.log('💳 Payment error:', error)
+          setShowPaymentModal(false)
+          toast({
+            variant: "destructive",
+            title: "❌ Payment Failed",
+            description: error.message || "Payment failed. Please try again."
+          })
+        }}
+      />
     </div>
   )
 }

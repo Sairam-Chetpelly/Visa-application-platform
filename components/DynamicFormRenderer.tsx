@@ -58,6 +58,7 @@ interface DynamicFormRendererProps {
   readOnly?: boolean
   countryName?: string
   visaTypeName?: string
+  isExistingApplication?: boolean
 }
 
 interface ValidationError {
@@ -72,7 +73,8 @@ export function DynamicFormRenderer({
   initialData, 
   readOnly = false,
   countryName,
-  visaTypeName
+  visaTypeName,
+  isExistingApplication = false
 }: DynamicFormRendererProps) {
   const [form, setForm] = useState<DynamicForm | null>(null)
   const [formData, setFormData] = useState<Record<string, any>>(initialData || {})
@@ -89,8 +91,29 @@ export function DynamicFormRenderer({
   useEffect(() => {
     if (initialData) {
       setFormData(initialData)
+    } else if (isExistingApplication && applicationId) {
+      // Load existing form data for draft applications
+      loadExistingFormData()
     }
-  }, [initialData])
+  }, [initialData, isExistingApplication, applicationId])
+
+  const loadExistingFormData = async () => {
+    if (!applicationId) return
+    
+    try {
+      const existingData = await apiClient.getFormSubmission(applicationId)
+      if (existingData && existingData.formData) {
+        setFormData(existingData.formData)
+        toast({
+          title: "Draft Loaded",
+          description: "Your previously saved data has been loaded."
+        })
+      }
+    } catch (error) {
+      console.log('No existing form data found, starting fresh')
+      // This is expected for new applications, so we don't show an error
+    }
+  }
 
   const fetchForm = async () => {
     try {
@@ -105,13 +128,17 @@ export function DynamicFormRenderer({
         formData = await apiClient.getFormByVisaType(visaTypeId)
       }
       
+      if (!formData) {
+        throw new Error('No form configuration found for this visa type')
+      }
+      
       setForm(formData)
     } catch (error) {
       console.error('Error fetching form:', error)
       toast({
         variant: "destructive",
-        title: "Error",
-        description: "Failed to load form. Please try again."
+        title: "Form Loading Error",
+        description: error instanceof Error ? error.message : "Failed to load form. Please contact support if this persists."
       })
     } finally {
       setLoading(false)
@@ -426,12 +453,37 @@ export function DynamicFormRenderer({
 
   if (!form) {
     return (
-      <Alert>
-        <AlertCircle className="h-4 w-4" />
-        <AlertDescription>
-          No form found for this visa type. Please contact support.
-        </AlertDescription>
-      </Alert>
+      <div className="space-y-4">
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            <div className="space-y-2">
+              <p className="font-medium">Form Not Available</p>
+              <p>No dynamic form is configured for this visa type yet. This could mean:</p>
+              <ul className="list-disc list-inside space-y-1 text-sm">
+                <li>The form is still being set up by our team</li>
+                <li>This visa type uses a different application process</li>
+                <li>There may be a temporary system issue</li>
+              </ul>
+              <p className="text-sm mt-2">Please contact our support team for assistance.</p>
+            </div>
+          </AlertDescription>
+        </Alert>
+        <div className="flex gap-3">
+          <Button 
+            variant="outline" 
+            onClick={() => window.history.back()}
+          >
+            Go Back
+          </Button>
+          <Button 
+            onClick={() => window.open('https://wa.me/919226166606', '_blank')}
+            className="bg-green-600 hover:bg-green-700"
+          >
+            Contact Support
+          </Button>
+        </div>
+      </div>
     )
   }
 
@@ -446,12 +498,20 @@ export function DynamicFormRenderer({
               <CardTitle className="flex items-center gap-2">
                 {form.formName}
                 {readOnly && <Badge variant="outline">Read Only</Badge>}
+                {isExistingApplication && !readOnly && (
+                  <Badge variant="default">Continuing Draft</Badge>
+                )}
               </CardTitle>
               <p className="text-gray-600 mt-1">
                 {form.countryId.name} - {form.visaTypeId.name}
               </p>
               {form.description && (
                 <p className="text-sm text-gray-500 mt-2">{form.description}</p>
+              )}
+              {isExistingApplication && (
+                <p className="text-sm text-blue-600 mt-2">
+                  ✨ You're continuing from a previously saved draft. Your data has been restored.
+                </p>
               )}
             </div>
           </div>
@@ -467,21 +527,32 @@ export function DynamicFormRenderer({
               .map(field => renderField(field))}
             
             {!readOnly && (
-              <div className="flex justify-end gap-3 pt-6 border-t">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    setFormData({})
-                    setTouchedFields(new Set())
-                    setErrors([])
-                  }}
-                >
-                  Clear Form
-                </Button>
-                <Button type="submit" disabled={submitting}>
+              <div className="flex justify-between items-center pt-6 border-t">
+                <div className="flex gap-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setFormData({})
+                      setTouchedFields(new Set())
+                      setErrors([])
+                    }}
+                  >
+                    Clear Form
+                  </Button>
+                  {isExistingApplication && (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={loadExistingFormData}
+                    >
+                      Reload Draft
+                    </Button>
+                  )}
+                </div>
+                <Button type="submit" disabled={submitting} className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700">
                   {submitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                  Submit Application
+                  {isExistingApplication ? "Update & Submit" : "Submit Application"}
                 </Button>
               </div>
             )}

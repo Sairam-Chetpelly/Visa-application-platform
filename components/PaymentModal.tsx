@@ -31,11 +31,15 @@ export default function PaymentModal({
   const [paymentStatus, setPaymentStatus] = useState<'idle' | 'processing' | 'success' | 'error'>('idle')
 
   // Debug logging
-  console.log('💳 PaymentModal props:', { isOpen, paymentData: !!paymentData })
+  console.log('💳 PaymentModal render:', { isOpen, paymentData: !!paymentData, paymentStatus })
   
   useEffect(() => {
-    console.log('💳 PaymentModal state changed:', { isOpen, paymentStatus, isProcessing })
-  }, [isOpen, paymentStatus, isProcessing])
+    console.log('💳 PaymentModal isOpen changed:', isOpen)
+  }, [isOpen])
+  
+  useEffect(() => {
+    console.log('💳 PaymentModal paymentData changed:', !!paymentData)
+  }, [paymentData])
 
   useEffect(() => {
     // Load Razorpay script
@@ -57,28 +61,47 @@ export default function PaymentModal({
   }, [isOpen])
 
   const handlePayment = () => {
+    console.log('💳 Payment button clicked', { paymentData })
+    
     if (!paymentData) {
+      console.error('❌ No payment data available')
       onPaymentError({ message: 'No payment data available' })
       return
     }
 
-    setIsProcessing(true)
-    setPaymentStatus('processing')
-
-    // Simulate payment for development
-    setTimeout(() => {
-      setPaymentStatus('success')
+    try {
+      setIsProcessing(true)
+      setPaymentStatus('processing')
+      
+      console.log('💳 Starting payment process...')
+      
+      // Simulate payment for development (remove Razorpay dependency)
       setTimeout(() => {
-        onPaymentSuccess({
-          razorpay_payment_id: 'pay_' + Date.now(),
-          razorpay_order_id: paymentData.orderId || 'order_' + Date.now(),
-          razorpay_signature: 'sig_' + Date.now()
-        })
-      }, 1000)
-    }, 2000)
+        console.log('💳 Payment simulation completed')
+        setPaymentStatus('success')
+        setTimeout(() => {
+          onPaymentSuccess({
+            razorpay_payment_id: 'pay_' + Date.now(),
+            razorpay_order_id: paymentData.razorpayOrderId || 'order_' + Date.now(),
+            razorpay_signature: 'sig_' + Date.now()
+          })
+        }, 1000)
+      }, 2000)
+      
+    } catch (error) {
+      console.error('❌ Payment error:', error)
+      setIsProcessing(false)
+      setPaymentStatus('idle')
+      onPaymentError({ message: error.message || 'Payment failed' })
+    }
   }
 
-  if (!paymentData) return null
+  if (!paymentData) {
+    console.log('💳 PaymentModal: No payment data, returning null')
+    return null
+  }
+  
+  console.log('💳 PaymentModal: Rendering with data:', paymentData)
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>

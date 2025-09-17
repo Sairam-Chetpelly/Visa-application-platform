@@ -238,7 +238,7 @@ export default function CustomerDashboard() {
     }
   }
 
-  const getActionButton = (action: string, status: string) => {
+  const getActionButton = (action: string, applicationData: any) => {
     if (action === 'Missing Docs') {
       return (
         <button className="flex items-center gap-2 px-3 py-1 bg-blue-100 text-blue-700 rounded-md text-sm">
@@ -264,7 +264,7 @@ export default function CustomerDashboard() {
       )
     }
     return (
-      <Link href={`/application-form?id=${status}`}>
+      <Link href={`/dynamic-application?visaType=${applicationData.visaTypeId}&country=${applicationData.countryId}&applicationId=${applicationData._id}`}>
         <Button size="sm" className="bg-blue-600 hover:bg-blue-700">
           Continue
         </Button>
@@ -627,7 +627,7 @@ export default function CustomerDashboard() {
                             View
                           </Button>
                           {app.status === "draft" && (
-                            <Link href={`/application-form?id=${app.id}`}>
+                            <Link href={`/dynamic-application?visaType=${app.visaTypeId}&country=${app.countryId}&applicationId=${app._id}`}>
                               <Button size="sm" className="text-xs px-2 py-1">Continue</Button>
                             </Link>
                           )}
@@ -679,7 +679,7 @@ export default function CustomerDashboard() {
                         View Details
                       </Button>
                       {app.status === "draft" && (
-                        <Link href={`/application-form?id=${app.id}`} className="flex-1">
+                        <Link href={`/dynamic-application?visaType=${app.visaTypeId}&country=${app.countryId}&applicationId=${app._id}`} className="flex-1">
                           <Button size="sm" className="w-full text-xs">Continue</Button>
                         </Link>
                       )}
@@ -962,7 +962,7 @@ export default function CustomerDashboard() {
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          {getActionButton('continue', app.id.toString())}
+                          {getActionButton('continue', app)}
                         </td>
                       </tr>
                     ))}
