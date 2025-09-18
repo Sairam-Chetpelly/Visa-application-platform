@@ -85,12 +85,15 @@ class ApiClient {
 
   // Auth endpoints
   async register(userData: {
-    firstName: string
-    lastName: string
+    firstName?: string
+    lastName?: string
+    name?: string
     email: string
-    mobile: string
+    mobile?: string
+    phone?: string
     password: string
-    country: string
+    country?: string
+    nationality?: string
   }) {
     return this.request("/register", {
       method: "POST",
@@ -232,11 +235,14 @@ class ApiClient {
 
   // Employee management (Admin only)
   async createEmployee(employeeData: {
-    firstName: string
-    lastName: string
+    firstName?: string
+    lastName?: string
+    name?: string
     email: string
+    phone?: string
     role: string
     password: string
+    nationality?: string
   }) {
     return this.request("/employees", {
       method: "POST",
@@ -325,6 +331,26 @@ class ApiClient {
       method: "PUT",
       body: JSON.stringify(profileData),
     })
+  }
+
+  async uploadProfileImage(file: File) {
+    const formData = new FormData()
+    formData.append("profile_img", file)
+
+    const response = await fetch(`${this.baseURL}/profile/upload-image`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${this.token}`,
+      },
+      body: formData,
+    })
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: "Upload failed" }))
+      throw new Error(error.error || `HTTP ${response.status}`)
+    }
+
+    return response.json()
   }
 
   async changePassword(passwordData: { currentPassword: string; newPassword: string }) {
@@ -698,10 +724,15 @@ export type {
 // Types for API responses
 export interface User {
   id: number
+  name?: string
   email: string
-  firstName: string
-  lastName: string
+  firstName?: string
+  lastName?: string
+  phone?: string
   userType: "customer" | "employee" | "admin"
+  nationality?: string
+  profile_img?: string
+  status?: string
 }
 
 export interface Country {

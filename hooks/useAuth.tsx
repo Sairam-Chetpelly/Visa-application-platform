@@ -37,28 +37,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 const userData = JSON.parse(storedUser)
                 setUser({
                   id: payload.userId,
+                  name: userData.name || payload.name,
                   email: payload.email,
                   firstName: userData.firstName || payload.firstName,
                   lastName: userData.lastName || payload.lastName,
+                  phone: userData.phone || payload.phone,
                   userType: payload.userType,
+                  nationality: userData.nationality || payload.nationality,
+                  profile_img: userData.profile_img || payload.profile_img,
+                  status: userData.status || payload.status
                 })
               } catch {
                 // Fallback to token data if user parsing fails
                 setUser({
                   id: payload.userId,
+                  name: payload.name,
                   email: payload.email,
                   firstName: payload.firstName,
                   lastName: payload.lastName,
+                  phone: payload.phone,
                   userType: payload.userType,
+                  nationality: payload.nationality,
+                  profile_img: payload.profile_img,
+                  status: payload.status
                 })
               }
             } else {
               setUser({
                 id: payload.userId,
+                name: payload.name,
                 email: payload.email,
                 firstName: payload.firstName,
                 lastName: payload.lastName,
+                phone: payload.phone,
                 userType: payload.userType,
+                nationality: payload.nationality,
+                profile_img: payload.profile_img,
+                status: payload.status
               })
             }
           } else {

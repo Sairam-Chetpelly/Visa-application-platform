@@ -48,15 +48,25 @@ export default function AdminDashboard() {
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null)
   const [employeeDialogOpen, setEmployeeDialogOpen] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
-  const [editForm, setEditForm] = useState({ firstName: '', lastName: '', email: '' })
+  const [editForm, setEditForm] = useState({ 
+    name: '', 
+    firstName: '', 
+    lastName: '', 
+    email: '', 
+    phone: '', 
+    nationality: '' 
+  })
   const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' })
   const [showPasswordForm, setShowPasswordForm] = useState(false)
   const [newEmployee, setNewEmployee] = useState({
+    name: "",
     firstName: "",
     lastName: "",
     email: "",
+    phone: "",
     role: "",
     password: "",
+    nationality: ""
   })
   const [newCountry, setNewCountry] = useState({
     name: "",
@@ -183,7 +193,14 @@ export default function AdminDashboard() {
     console.log("Admin user authenticated, fetching data...")
     fetchData()
     if (user) {
-      setEditForm({ firstName: user.firstName || '', lastName: user.lastName || '', email: user.email || '' })
+      setEditForm({ 
+        name: user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim(),
+        firstName: user.firstName || '', 
+        lastName: user.lastName || '', 
+        email: user.email || '',
+        phone: user.phone || '',
+        nationality: user.nationality || ''
+      })
     }
   }, [user, router, initialized])
   
@@ -315,7 +332,7 @@ export default function AdminDashboard() {
 
     try {
       await apiClient.createEmployee(newEmployee)
-      setNewEmployee({ firstName: "", lastName: "", email: "", role: "", password: "" })
+      setNewEmployee({ name: "", firstName: "", lastName: "", email: "", phone: "", role: "", password: "", nationality: "" })
       toast({
         variant: "success",
         title: "Employee Created",
@@ -340,8 +357,11 @@ export default function AdminDashboard() {
   const handleEditProfile = async () => {
     try {
       await apiClient.updateProfile({
+        name: editForm.name,
         firstName: editForm.firstName,
         lastName: editForm.lastName,
+        phone: editForm.phone,
+        nationality: editForm.nationality,
         profileData: {}
       })
       
@@ -349,16 +369,21 @@ export default function AdminDashboard() {
       const currentUser = JSON.parse(localStorage.getItem('user') || '{}')
       const updatedUser = {
         ...currentUser,
+        name: editForm.name,
         firstName: editForm.firstName,
-        lastName: editForm.lastName
+        lastName: editForm.lastName,
+        phone: editForm.phone,
+        nationality: editForm.nationality
       }
       localStorage.setItem('user', JSON.stringify(updatedUser))
       
       // Update user state in auth context
       if (user) {
-        // Force update the user object in memory
+        user.name = editForm.name
         user.firstName = editForm.firstName
         user.lastName = editForm.lastName
+        user.phone = editForm.phone
+        user.nationality = editForm.nationality
       }
       
       setIsEditing(false)
@@ -887,9 +912,10 @@ export default function AdminDashboard() {
                     <User className="w-12 h-12 text-gray-500" />
                   </div>
                   <div className="flex-1">
-                    <h3 className="text-xl font-semibold">{user?.firstName} {user?.lastName}</h3>
+                    <h3 className="text-xl font-semibold">{user?.name || `${user?.firstName} ${user?.lastName}`}</h3>
                     <p className="text-gray-600">{user?.email}</p>
-                    <p className="text-sm text-gray-500">Admin ID: {user?.userId}</p>
+                    <p className="text-sm text-gray-500">User Type: {user?.userType}</p>
+                    {user?.nationality && <p className="text-sm text-gray-500">Nationality: {user.nationality}</p>}
                   </div>
                   <div className="flex gap-2">
                     <Button variant="outline" onClick={() => setIsEditing(!isEditing)}>
@@ -1027,35 +1053,43 @@ export default function AdminDashboard() {
                       <DialogDescription>Create a new employee account with system access</DialogDescription>
                     </DialogHeader>
                     <form onSubmit={handleAddEmployee} className="space-y-4">
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="empFirstName">First Name</Label>
-                          <Input
-                            id="empFirstName"
-                            value={newEmployee.firstName}
-                            onChange={(e) => setNewEmployee({ ...newEmployee, firstName: e.target.value })}
-                            required
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="empLastName">Last Name</Label>
-                          <Input
-                            id="empLastName"
-                            value={newEmployee.lastName}
-                            onChange={(e) => setNewEmployee({ ...newEmployee, lastName: e.target.value })}
-                            required
-                          />
-                        </div>
-                      </div>
                       <div className="space-y-2">
-                        <Label htmlFor="empEmail">Email Address</Label>
+                        <Label htmlFor="empName">Full Name</Label>
                         <Input
-                          id="empEmail"
-                          type="email"
-                          value={newEmployee.email}
-                          onChange={(e) => setNewEmployee({ ...newEmployee, email: e.target.value })}
+                          id="empName"
+                          value={newEmployee.name}
+                          onChange={(e) => {
+                            const nameParts = e.target.value.split(' ')
+                            setNewEmployee({ 
+                              ...newEmployee, 
+                              name: e.target.value,
+                              firstName: nameParts[0] || '',
+                              lastName: nameParts.slice(1).join(' ') || ''
+                            })
+                          }}
                           required
                         />
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="empEmail">Email Address</Label>
+                          <Input
+                            id="empEmail"
+                            type="email"
+                            value={newEmployee.email}
+                            onChange={(e) => setNewEmployee({ ...newEmployee, email: e.target.value })}
+                            required
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="empPhone">Phone</Label>
+                          <Input
+                            id="empPhone"
+                            value={newEmployee.phone}
+                            onChange={(e) => setNewEmployee({ ...newEmployee, phone: e.target.value })}
+                            required
+                          />
+                        </div>
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="empRole">Role</Label>
@@ -1070,15 +1104,25 @@ export default function AdminDashboard() {
                           </SelectContent>
                         </Select>
                       </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="empPassword">Temporary Password</Label>
-                        <Input
-                          id="empPassword"
-                          type="password"
-                          value={newEmployee.password}
-                          onChange={(e) => setNewEmployee({ ...newEmployee, password: e.target.value })}
-                          required
-                        />
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="empPassword">Temporary Password</Label>
+                          <Input
+                            id="empPassword"
+                            type="password"
+                            value={newEmployee.password}
+                            onChange={(e) => setNewEmployee({ ...newEmployee, password: e.target.value })}
+                            required
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="empNationality">Nationality</Label>
+                          <Input
+                            id="empNationality"
+                            value={newEmployee.nationality}
+                            onChange={(e) => setNewEmployee({ ...newEmployee, nationality: e.target.value })}
+                          />
+                        </div>
                       </div>
                       <DialogFooter>
                         <Button className="bg-gradient-to-r from-blue-400 to-purple-500 hover:from-blue-500 hover:to-purple-600" type="submit">Add Employee</Button>
@@ -1095,22 +1139,22 @@ export default function AdminDashboard() {
                       <TableRow>
                         <TableHead>Name</TableHead>
                         <TableHead>Email</TableHead>
+                        <TableHead>Phone</TableHead>
                         <TableHead>Role</TableHead>
                         <TableHead>Status</TableHead>
-                        <TableHead>Hire Date</TableHead>
                         <TableHead>Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {employeesPagination.paginatedData.map((employee) => (
                         <TableRow key={employee._id}>
-                          <TableCell>{employee.firstName} {employee.lastName}</TableCell>
+                          <TableCell>{employee.name || `${employee.firstName} ${employee.lastName}`}</TableCell>
                           <TableCell>{employee.email}</TableCell>
+                          <TableCell>{employee.phone || "N/A"}</TableCell>
                           <TableCell>{employee.role}</TableCell>
                           <TableCell>
                             <Badge className={getStatusColor(employee.status)}>{employee.status}</Badge>
                           </TableCell>
-                          <TableCell>{employee.hireDate ? new Date(employee.hireDate).toLocaleDateString() : "N/A"}</TableCell>
                           <TableCell>
                             <div className="flex space-x-2">
                               <Dialog>
@@ -1128,10 +1172,10 @@ export default function AdminDashboard() {
                                     const formData = new FormData(e.target as HTMLFormElement)
                                     try {
                                       await apiClient.updateEmployee(employee._id, {
-                                        firstName: formData.get('firstName') as string,
-                                        lastName: formData.get('lastName') as string,
+                                        name: formData.get('name') as string,
                                         email: formData.get('email') as string,
                                         phone: formData.get('phone') as string,
+                                        nationality: formData.get('nationality') as string,
                                         status: formData.get('status') as string,
                                         role: formData.get('role') as string
                                       })
@@ -1150,23 +1194,23 @@ export default function AdminDashboard() {
                                       })
                                     }
                                   }} className="space-y-4">
-                                    <div className="grid grid-cols-2 gap-4">
-                                      <div>
-                                        <Label>First Name</Label>
-                                        <Input name="firstName" defaultValue={employee.firstName} required />
-                                      </div>
-                                      <div>
-                                        <Label>Last Name</Label>
-                                        <Input name="lastName" defaultValue={employee.lastName} required />
-                                      </div>
+                                    <div>
+                                      <Label>Full Name</Label>
+                                      <Input name="name" defaultValue={employee.name || `${employee.firstName} ${employee.lastName}`} required />
                                     </div>
                                     <div>
                                       <Label>Email</Label>
                                       <Input name="email" type="email" defaultValue={employee.email} required />
                                     </div>
-                                    <div>
-                                      <Label>Phone</Label>
-                                      <Input name="phone" defaultValue={employee.phone || ''} />
+                                    <div className="grid grid-cols-2 gap-4">
+                                      <div>
+                                        <Label>Phone</Label>
+                                        <Input name="phone" defaultValue={employee.phone || ''} />
+                                      </div>
+                                      <div>
+                                        <Label>Nationality</Label>
+                                        <Input name="nationality" defaultValue={employee.nationality || ''} />
+                                      </div>
                                     </div>
                                     <div>
                                       <Label>Role</Label>
@@ -1250,10 +1294,10 @@ export default function AdminDashboard() {
                     <TableBody>
                       {customersPagination.paginatedData.map((customer) => (
                         <TableRow key={customer._id}>
-                          <TableCell>{customer.firstName} {customer.lastName}</TableCell>
+                          <TableCell>{customer.name || `${customer.firstName} ${customer.lastName}`}</TableCell>
                           <TableCell>{customer.email}</TableCell>
                           <TableCell>{customer.phone || "N/A"}</TableCell>
-                          <TableCell>{customer.country || "N/A"}</TableCell>
+                          <TableCell>{customer.nationality || customer.country || "N/A"}</TableCell>
                           <TableCell>
                             <Badge className={getStatusColor(customer.status)}>{customer.status}</Badge>
                           </TableCell>
@@ -1275,10 +1319,10 @@ export default function AdminDashboard() {
                                     const formData = new FormData(e.target as HTMLFormElement)
                                     try {
                                       await apiClient.updateCustomer(customer._id, {
-                                        firstName: formData.get('firstName') as string,
-                                        lastName: formData.get('lastName') as string,
+                                        name: formData.get('name') as string,
                                         email: formData.get('email') as string,
                                         phone: formData.get('phone') as string,
+                                        nationality: formData.get('nationality') as string,
                                         status: formData.get('status') as string
                                       })
                                       await customersPagination.refresh()
@@ -1296,23 +1340,23 @@ export default function AdminDashboard() {
                                       })
                                     }
                                   }} className="space-y-4">
-                                    <div className="grid grid-cols-2 gap-4">
-                                      <div>
-                                        <Label>First Name</Label>
-                                        <Input name="firstName" defaultValue={customer.firstName} required />
-                                      </div>
-                                      <div>
-                                        <Label>Last Name</Label>
-                                        <Input name="lastName" defaultValue={customer.lastName} required />
-                                      </div>
+                                    <div>
+                                      <Label>Full Name</Label>
+                                      <Input name="name" defaultValue={customer.name || `${customer.firstName} ${customer.lastName}`} required />
                                     </div>
                                     <div>
                                       <Label>Email</Label>
                                       <Input name="email" type="email" defaultValue={customer.email} required />
                                     </div>
-                                    <div>
-                                      <Label>Phone</Label>
-                                      <Input name="phone" defaultValue={customer.phone || ''} />
+                                    <div className="grid grid-cols-2 gap-4">
+                                      <div>
+                                        <Label>Phone</Label>
+                                        <Input name="phone" defaultValue={customer.phone || ''} />
+                                      </div>
+                                      <div>
+                                        <Label>Nationality</Label>
+                                        <Input name="nationality" defaultValue={customer.nationality || customer.country || ''} />
+                                      </div>
                                     </div>
                                     <div>
                                       <Label>Status</Label>

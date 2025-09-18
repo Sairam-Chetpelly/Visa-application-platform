@@ -27,6 +27,7 @@ export default function RegisterPage() {
     password: "",
     confirmPassword: "",
     country: "",
+    nationality: "",
     agreeTerms: false,
   })
   const [submitError, setSubmitError] = useState<string | null>(null)
@@ -68,12 +69,15 @@ export default function RegisterPage() {
 
     try {
       await register({
+        name: formData.fullName,
         firstName,
         lastName,
         email: formData.email,
-        mobile: formData.mobile,
+        phone: formData.mobile,
+        mobile: formData.mobile, // Keep for backward compatibility
         password: formData.password,
         country: formData.country || 'other',
+        nationality: formData.nationality || formData.country || 'Not Specified',
       })
 
       toast({
@@ -212,6 +216,15 @@ export default function RegisterPage() {
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 className="w-full p-4 border border-gray-300 rounded-lg text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                 required
+              />
+            </div>
+             <div>
+              <Input
+                type="text"
+                placeholder="Nationality (Optional)"
+                value={formData.nationality}
+                onChange={(e) => setFormData({ ...formData, nationality: e.target.value })}
+                className="w-full p-4 border border-gray-300 rounded-lg text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
               />
             </div>
 

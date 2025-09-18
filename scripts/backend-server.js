@@ -312,11 +312,20 @@ app.get("/api/health", async (req, res) => {
 // User Registration
 app.post("/api/register", async (req, res) => {
   try {
-    const { firstName, lastName, email, mobile, password, country } = req.body
+    const { firstName, lastName, name, email, mobile, phone, password, country, nationality } = req.body
+
+    // Support both old and new field names
+    const fullName = name || `${firstName || ''} ${lastName || ''}`.trim()
+    const phoneNumber = phone || mobile
+    const userNationality = nationality || country
 
     // Validate required fields
-    if (!firstName || !lastName || !email || !password) {
-      return res.status(400).json({ error: "Missing required fields" })
+    if (!email || !password || !phoneNumber) {
+      return res.status(400).json({ error: "Email, password, and phone are required" })
+    }
+
+    if (!userNationality) {
+      return res.status(400).json({ error: "Nationality is required" })
     }
 
     // Check if user already exists
@@ -328,21 +337,27 @@ app.post("/api/register", async (req, res) => {
     // Hash password
     const passwordHash = await bcrypt.hash(password, 10)
 
-    // Create user
+    // Create user with new schema
     const user = new User({
+      name: fullName,
       email,
+      password: passwordHash,
+      phone: phoneNumber,
+      userType: "customer",
+      nationality: userNationality,
+      status: "active",
+      // Backward compatibility
       passwordHash,
-      firstName,
-      lastName,
-      phone: mobile,
-      userType: "customer"
+      firstName: firstName || fullName.split(' ')[0] || '',
+      lastName: lastName || fullName.split(' ').slice(1).join(' ') || ''
     })
     await user.save()
 
     // Create customer profile
     await new CustomerProfile({
       userId: user._id,
-      country
+      country: country || userNationality,
+      nationality: userNationality
     }).save()
 
     // Send welcome notification
@@ -352,7 +367,7 @@ app.post("/api/register", async (req, res) => {
       "Welcome to Options Travel Services",
       "Your account has been created successfully. You can now start your visa application process.",
       null,
-      whatsappTemplates.welcome(`${firstName} ${lastName}`)
+      whatsappTemplates.welcome(fullName || `${firstName} ${lastName}`)
     )
 
     res.status(201).json({ message: "User registered successfully", userId: user._id })
@@ -378,8 +393,9 @@ app.post("/api/login", async (req, res) => {
       return res.status(401).json({ error: "Invalid credentials" })
     }
 
-    // Check password
-    const isValidPassword = await bcrypt.compare(password, user.passwordHash)
+    // Check password (support both old and new password fields)
+    const storedPassword = user.password || user.passwordHash
+    const isValidPassword = await bcrypt.compare(password, storedPassword)
     if (!isValidPassword) {
       return res.status(401).json({ error: "Invalid credentials" })
     }
@@ -389,14 +405,19 @@ app.post("/api/login", async (req, res) => {
       return res.status(401).json({ error: "Account is not active" })
     }
 
-    // Generate JWT token
+    // Generate JWT token with backward compatibility
+    const firstName = user.firstName || user.name?.split(' ')[0] || ''
+    const lastName = user.lastName || user.name?.split(' ').slice(1).join(' ') || ''
+    
     const token = jwt.sign(
       {
         userId: user._id,
         email: user.email,
         userType: user.userType,
-        firstName: user.firstName,
-        lastName: user.lastName,
+        firstName,
+        lastName,
+        name: user.name,
+        nationality: user.nationality
       },
       JWT_SECRET,
       { expiresIn: "24h" },
@@ -407,9 +428,14 @@ app.post("/api/login", async (req, res) => {
       user: {
         id: user._id,
         email: user.email,
-        firstName: user.firstName,
-        lastName: user.lastName,
+        name: user.name,
+        firstName,
+        lastName,
+        phone: user.phone,
         userType: user.userType,
+        nationality: user.nationality,
+        profile_img: user.profile_img,
+        status: user.status
       },
     })
   } catch (error) {
@@ -438,7 +464,7 @@ app.post("/api/forgot-password", async (req, res) => {
     // Generate reset token
     const resetToken = jwt.sign(
       { userId: user._id, email: user.email },
-      JWT_SECRET + user.passwordHash, // Include password hash to invalidate token when password changes
+      JWT_SECRET + (user.password || user.passwordHash), // Include password hash to invalidate token when password changes
       { expiresIn: "1h" }
     )
 
@@ -518,8 +544,9 @@ app.post("/api/reset-password", async (req, res) => {
         return res.status(400).json({ error: "Invalid token" })
       }
 
-      // Verify token with password hash
-      decoded = jwt.verify(token, JWT_SECRET + user.passwordHash)
+      // Verify token with password hash (support both fields)
+      const storedPassword = user.password || user.passwordHash
+      decoded = jwt.verify(token, JWT_SECRET + storedPassword)
     } catch (jwtError) {
       return res.status(400).json({ error: "Invalid or expired token" })
     }
@@ -533,8 +560,11 @@ app.post("/api/reset-password", async (req, res) => {
     // Hash new password
     const passwordHash = await bcrypt.hash(password, 10)
 
-    // Update password
-    await User.findByIdAndUpdate(user._id, { passwordHash })
+    // Update password (both fields for compatibility)
+    await User.findByIdAndUpdate(user._id, { 
+      password: passwordHash,
+      passwordHash 
+    })
 
     // Send confirmation email
     if (emailTransporter) {
@@ -1511,7 +1541,16 @@ app.post("/api/employees", authenticateToken, async (req, res) => {
       return res.status(403).json({ error: "Access denied" })
     }
 
-    const { firstName,lastName, email, role, password } = req.body
+    const { firstName, lastName, name, email, phone, role, password, nationality } = req.body
+
+    // Support both old and new field names
+    const fullName = name || `${firstName || ''} ${lastName || ''}`.trim()
+    const employeeNationality = nationality || 'Not Specified'
+
+    // Validate required fields
+    if (!email || !password || !phone) {
+      return res.status(400).json({ error: "Email, password, and phone are required" })
+    }
 
     // Check if user already exists
     const existingUser = await User.findOne({ email })
@@ -1522,13 +1561,19 @@ app.post("/api/employees", authenticateToken, async (req, res) => {
     // Hash password
     const passwordHash = await bcrypt.hash(password, 10)
 
-    // Create user
+    // Create user with new schema
     const user = new User({
+      name: fullName,
       email,
+      password: passwordHash,
+      phone,
+      userType: "employee",
+      nationality: employeeNationality,
+      status: "active",
+      // Backward compatibility
       passwordHash,
-      firstName: firstName,
-      lastName: lastName,
-      userType: "employee"
+      firstName: firstName || fullName.split(' ')[0] || '',
+      lastName: lastName || fullName.split(' ').slice(1).join(' ') || ''
     })
     await user.save()
 
@@ -1553,7 +1598,7 @@ app.post("/api/employees", authenticateToken, async (req, res) => {
       null,
       `🎉 Welcome to Options Travel Services Team!
 
-Hi ${firstName} ${lastName},
+Hi ${fullName},
 Your employee account has been created successfully.
 
 Role: ${role}
@@ -1687,10 +1732,13 @@ app.get("/api/admin/employees", authenticateToken, async (req, res) => {
       },
       {
         $project: {
+          name: 1,
           firstName: 1,
           lastName: 1,
           email: 1,
           phone: 1,
+          nationality: 1,
+          profile_img: 1,
           status: 1,
           createdAt: 1,
           role: { $arrayElemAt: ['$profile.role', 0] },
@@ -1724,16 +1772,30 @@ app.put("/api/admin/employees/:id", authenticateToken, async (req, res) => {
       return res.status(403).json({ error: "Access denied" })
     }
 
-    const { firstName, lastName, email, phone, status, role } = req.body
+    const { firstName, lastName, name, email, phone, status, role, nationality, profile_img } = req.body
     const employeeId = req.params.id
 
-    await User.findByIdAndUpdate(employeeId, {
-      firstName,
-      lastName,
+    // Support both old and new field names
+    const updateData = {
       email,
       phone,
       status
-    })
+    }
+    
+    if (name) {
+      updateData.name = name
+      updateData.firstName = name.split(' ')[0] || ''
+      updateData.lastName = name.split(' ').slice(1).join(' ') || ''
+    } else if (firstName || lastName) {
+      updateData.firstName = firstName
+      updateData.lastName = lastName
+      updateData.name = `${firstName || ''} ${lastName || ''}`.trim()
+    }
+    
+    if (nationality) updateData.nationality = nationality
+    if (profile_img) updateData.profile_img = profile_img
+
+    await User.findByIdAndUpdate(employeeId, updateData)
 
     await EmployeeProfile.findOneAndUpdate(
       { userId: employeeId },
@@ -2304,13 +2366,16 @@ app.get("/api/admin/customers", authenticateToken, async (req, res) => {
       },
       {
         $project: {
+          name: 1,
           firstName: 1,
           lastName: 1,
           email: 1,
           phone: 1,
+          nationality: 1,
+          profile_img: 1,
           status: 1,
           createdAt: 1,
-          nationality: { $arrayElemAt: ['$profile.nationality', 0] },
+          profileNationality: { $arrayElemAt: ['$profile.nationality', 0] },
           country: { $arrayElemAt: ['$profile.country', 0] },
           passportNumber: { $arrayElemAt: ['$profile.passportNumber', 0] }
         }
@@ -2341,16 +2406,30 @@ app.put("/api/admin/customers/:id", authenticateToken, async (req, res) => {
       return res.status(403).json({ error: "Access denied" })
     }
 
-    const { firstName, lastName, email, phone, status } = req.body
+    const { firstName, lastName, name, email, phone, status, nationality, profile_img } = req.body
     const customerId = req.params.id
 
-    await User.findByIdAndUpdate(customerId, {
-      firstName,
-      lastName,
+    // Support both old and new field names
+    const updateData = {
       email,
       phone,
       status
-    })
+    }
+    
+    if (name) {
+      updateData.name = name
+      updateData.firstName = name.split(' ')[0] || ''
+      updateData.lastName = name.split(' ').slice(1).join(' ') || ''
+    } else if (firstName || lastName) {
+      updateData.firstName = firstName
+      updateData.lastName = lastName
+      updateData.name = `${firstName || ''} ${lastName || ''}`.trim()
+    }
+    
+    if (nationality) updateData.nationality = nationality
+    if (profile_img) updateData.profile_img = profile_img
+
+    await User.findByIdAndUpdate(customerId, updateData)
 
     res.json({ message: "Customer updated successfully" })
   } catch (error) {
@@ -2397,11 +2476,14 @@ app.get("/api/profile", authenticateToken, async (req, res) => {
     res.json({
       user: {
         id: user._id,
+        name: user.name,
         email: user.email,
-        firstName: user.firstName,
-        lastName: user.lastName,
+        firstName: user.firstName || user.name?.split(' ')[0] || '',
+        lastName: user.lastName || user.name?.split(' ').slice(1).join(' ') || '',
         phone: user.phone,
         userType: user.userType,
+        nationality: user.nationality,
+        profile_img: user.profile_img,
         status: user.status
       },
       profile: profile || {}
@@ -2414,14 +2496,27 @@ app.get("/api/profile", authenticateToken, async (req, res) => {
 
 app.put("/api/profile", authenticateToken, async (req, res) => {
   try {
-    const { firstName, lastName, phone, profileData } = req.body
+    const { firstName, lastName, name, phone, nationality, profile_img, profileData } = req.body
 
-    // Update user basic info
-    await User.findByIdAndUpdate(req.user.userId, {
-      firstName,
-      lastName,
+    // Update user basic info (support both old and new schema)
+    const updateData = {
       phone
-    })
+    }
+    
+    if (name) {
+      updateData.name = name
+      updateData.firstName = name.split(' ')[0] || ''
+      updateData.lastName = name.split(' ').slice(1).join(' ') || ''
+    } else if (firstName || lastName) {
+      updateData.firstName = firstName
+      updateData.lastName = lastName
+      updateData.name = `${firstName || ''} ${lastName || ''}`.trim()
+    }
+    
+    if (nationality) updateData.nationality = nationality
+    if (profile_img) updateData.profile_img = profile_img
+    
+    await User.findByIdAndUpdate(req.user.userId, updateData)
 
     // Update profile data based on user type
     if (req.user.userType === "customer") {
@@ -2451,6 +2546,28 @@ app.put("/api/profile", authenticateToken, async (req, res) => {
   }
 })
 
+// Upload Profile Image
+app.post("/api/profile/upload-image", authenticateToken, upload.single("profile_img"), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "No image file uploaded" })
+    }
+
+    // Update user profile image path
+    await User.findByIdAndUpdate(req.user.userId, {
+      profile_img: req.file.path
+    })
+
+    res.json({ 
+      message: "Profile image uploaded successfully",
+      profile_img: req.file.path
+    })
+  } catch (error) {
+    console.error("Error uploading profile image:", error)
+    res.status(500).json({ error: "Internal server error" })
+  }
+})
+
 // Change Password
 app.post("/api/change-password", authenticateToken, async (req, res) => {
   try {
@@ -2470,8 +2587,9 @@ app.post("/api/change-password", authenticateToken, async (req, res) => {
       return res.status(404).json({ error: "User not found" })
     }
 
-    // Verify current password
-    const isValidPassword = await bcrypt.compare(currentPassword, user.passwordHash)
+    // Verify current password (support both fields)
+    const storedPassword = user.password || user.passwordHash
+    const isValidPassword = await bcrypt.compare(currentPassword, storedPassword)
     if (!isValidPassword) {
       return res.status(400).json({ error: "Current password is incorrect" })
     }
@@ -2479,8 +2597,11 @@ app.post("/api/change-password", authenticateToken, async (req, res) => {
     // Hash new password
     const newPasswordHash = await bcrypt.hash(newPassword, 10)
 
-    // Update password
-    await User.findByIdAndUpdate(req.user.userId, { passwordHash: newPasswordHash })
+    // Update password (both fields for compatibility)
+    await User.findByIdAndUpdate(req.user.userId, { 
+      password: newPasswordHash,
+      passwordHash: newPasswordHash 
+    })
 
     res.json({ message: "Password changed successfully" })
   } catch (error) {
@@ -2959,6 +3080,57 @@ app.get("/api/list/users", authenticateToken, (req, res) => {
     return res.status(403).json({ error: "Access denied" })
   }
   listUsers(req, res)
+})
+
+// Get user statistics (Admin only)
+app.get("/api/admin/user-stats", authenticateToken, async (req, res) => {
+  try {
+    if (req.user.userType !== "admin") {
+      return res.status(403).json({ error: "Access denied" })
+    }
+
+    const stats = await Promise.all([
+      // Total users by type
+      User.aggregate([
+        { $group: { _id: '$userType', count: { $sum: 1 } } }
+      ]),
+      
+      // Users by status
+      User.aggregate([
+        { $group: { _id: '$status', count: { $sum: 1 } } }
+      ]),
+      
+      // Users by nationality (top 10)
+      User.aggregate([
+        { $match: { nationality: { $exists: true, $ne: 'Not Specified' } } },
+        { $group: { _id: '$nationality', count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+        { $limit: 10 }
+      ]),
+      
+      // Recent registrations (last 30 days)
+      User.countDocuments({
+        createdAt: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }
+      }),
+      
+      // Users with profile images
+      User.countDocuments({
+        profile_img: { $exists: true, $ne: null, $ne: '' }
+      })
+    ])
+
+    res.json({
+      usersByType: stats[0],
+      usersByStatus: stats[1],
+      usersByNationality: stats[2],
+      recentRegistrations: stats[3],
+      usersWithProfileImages: stats[4],
+      totalUsers: await User.countDocuments({})
+    })
+  } catch (error) {
+    console.error("Error fetching user statistics:", error)
+    res.status(500).json({ error: "Internal server error" })
+  }
 })
 
 // List all countries with advanced filtering

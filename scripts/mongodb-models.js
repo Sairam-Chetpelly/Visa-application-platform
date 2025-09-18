@@ -3,13 +3,18 @@ import mongoose from 'mongoose'
 
 // User Schema
 const userSchema = new mongoose.Schema({
+  name: String,
   email: { type: String, required: true, unique: true },
-  passwordHash: { type: String, required: true },
-  firstName: { type: String, required: true },
-  lastName: { type: String, required: true },
-  phone: String,
-  userType: { type: String, enum: ['customer', 'employee', 'admin'], required: true },
-  status: { type: String, enum: ['active', 'inactive', 'suspended'], default: 'active' }
+  password: { type: String, required: true },
+  phone: { type: String, required: true },
+  userType: { type: String, enum: ['admin', 'employee', 'customer'], required: true, default: 'customer' },
+  nationality: { type: String, required: true },
+  profile_img: String,
+  status: { type: String, enum: ['active', 'inactive'], required: true, default: 'active' },
+  // Legacy fields for backward compatibility
+  passwordHash: { type: String },
+  firstName: String,
+  lastName: String
 }, { timestamps: true })
 
 // Customer Profile Schema

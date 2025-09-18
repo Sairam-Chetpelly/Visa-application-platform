@@ -16,7 +16,16 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isEditing, setIsEditing] = useState(false)
-  const [editForm, setEditForm] = useState({ firstName: '', lastName: '', email: '' })
+  const [editForm, setEditForm] = useState({ 
+    name: '', 
+    firstName: '', 
+    lastName: '', 
+    email: '', 
+    phone: '', 
+    nationality: '' 
+  })
+  const [profileImage, setProfileImage] = useState<File | null>(null)
+  const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' })
   const [showPasswordForm, setShowPasswordForm] = useState(false)
   const [scrolled, setScrolled] = useState(false)
@@ -30,7 +39,17 @@ export default function ProfilePage() {
     
     setLoading(false)
     if (user) {
-      setEditForm({ firstName: user.firstName || '', lastName: user.lastName || '', email: user.email || '' })
+      setEditForm({ 
+        name: user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim(),
+        firstName: user.firstName || '', 
+        lastName: user.lastName || '', 
+        email: user.email || '',
+        phone: user.phone || '',
+        nationality: user.nationality || ''
+      })
+      if (user.profile_img) {
+        setImagePreview(user.profile_img)
+      }
     }
   }, [user, router, initialized])
 
@@ -42,11 +61,31 @@ export default function ProfilePage() {
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
 
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      setProfileImage(file)
+      const reader = new FileReader()
+      reader.onload = () => {
+        setImagePreview(reader.result as string)
+      }
+      reader.readAsDataURL(file)
+    }
+  }
+
   const handleEditProfile = async () => {
     try {
+      // Upload profile image if selected
+      if (profileImage) {
+        await apiClient.uploadProfileImage(profileImage)
+      }
+      
       await apiClient.updateProfile({
+        name: editForm.name,
         firstName: editForm.firstName,
         lastName: editForm.lastName,
+        phone: editForm.phone,
+        nationality: editForm.nationality,
         profileData: {}
       })
       
@@ -54,19 +93,25 @@ export default function ProfilePage() {
       const currentUser = JSON.parse(localStorage.getItem('user') || '{}')
       const updatedUser = {
         ...currentUser,
+        name: editForm.name,
         firstName: editForm.firstName,
-        lastName: editForm.lastName
+        lastName: editForm.lastName,
+        phone: editForm.phone,
+        nationality: editForm.nationality
       }
       localStorage.setItem('user', JSON.stringify(updatedUser))
       
       // Update user state in auth context
       if (user) {
-        // Force update the user object in memory
+        user.name = editForm.name
         user.firstName = editForm.firstName
         user.lastName = editForm.lastName
+        user.phone = editForm.phone
+        user.nationality = editForm.nationality
       }
       
       setIsEditing(false)
+      setProfileImage(null)
       toast({
         title: "Success",
         description: "Profile updated successfully"
@@ -162,13 +207,31 @@ export default function ProfilePage() {
           <h2 className="text-xl font-semibold">My Profile</h2>
           <div className="bg-white rounded-lg border p-6">
             <div className="flex items-center gap-6 mb-6">
-              <div className="w-20 h-20 bg-gray-200 rounded-full flex items-center justify-center">
-                <User className="w-12 h-12 text-gray-500" />
+              <div className="relative">
+                <div className="w-20 h-20 bg-gray-200 rounded-full flex items-center justify-center overflow-hidden">
+                  {imagePreview ? (
+                    <img src={imagePreview} alt="Profile" className="w-full h-full object-cover" />
+                  ) : (
+                    <User className="w-12 h-12 text-gray-500" />
+                  )}
+                </div>
+                {isEditing && (
+                  <label className="absolute -bottom-2 -right-2 bg-blue-500 text-white rounded-full p-1 cursor-pointer hover:bg-blue-600">
+                    <Edit className="w-3 h-3" />
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      onChange={handleImageChange}
+                      className="hidden"
+                    />
+                  </label>
+                )}
               </div>
               <div className="flex-1">
-                <h3 className="text-xl font-semibold">{user?.firstName} {user?.lastName}</h3>
+                <h3 className="text-xl font-semibold">{user?.name || `${user?.firstName} ${user?.lastName}`}</h3>
                 <p className="text-gray-600">{user?.email}</p>
-                <p className="text-sm text-gray-500">User ID: {user?.userId}</p>
+                <p className="text-sm text-gray-500">User Type: {user?.userType}</p>
+                {user?.nationality && <p className="text-sm text-gray-500">Nationality: {user.nationality}</p>}
               </div>
               <div className="flex gap-2">
                 <Button variant="outline" onClick={() => setIsEditing(!isEditing)}>
@@ -183,21 +246,29 @@ export default function ProfilePage() {
             
             <div className="grid md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">First Name</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Full Name</label>
                 <input 
                   type="text" 
-                  value={isEditing ? editForm.firstName : user?.firstName || ''}
-                  onChange={(e) => setEditForm({...editForm, firstName: e.target.value})}
+                  value={isEditing ? editForm.name : (user?.name || `${user?.firstName} ${user?.lastName}`)}
+                  onChange={(e) => {
+                    const nameParts = e.target.value.split(' ')
+                    setEditForm({
+                      ...editForm, 
+                      name: e.target.value,
+                      firstName: nameParts[0] || '',
+                      lastName: nameParts.slice(1).join(' ') || ''
+                    })
+                  }}
                   disabled={!isEditing}
                   className={`w-full p-3 border rounded-lg ${isEditing ? 'bg-white' : 'bg-gray-50'}`}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Last Name</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Phone</label>
                 <input 
                   type="text" 
-                  value={isEditing ? editForm.lastName : user?.lastName || ''}
-                  onChange={(e) => setEditForm({...editForm, lastName: e.target.value})}
+                  value={isEditing ? editForm.phone : user?.phone || ''}
+                  onChange={(e) => setEditForm({...editForm, phone: e.target.value})}
                   disabled={!isEditing}
                   className={`w-full p-3 border rounded-lg ${isEditing ? 'bg-white' : 'bg-gray-50'}`}
                 />
@@ -212,10 +283,29 @@ export default function ProfilePage() {
                 />
               </div>
               <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Nationality</label>
+                <input 
+                  type="text" 
+                  value={isEditing ? editForm.nationality : user?.nationality || ''}
+                  onChange={(e) => setEditForm({...editForm, nationality: e.target.value})}
+                  disabled={!isEditing}
+                  className={`w-full p-3 border rounded-lg ${isEditing ? 'bg-white' : 'bg-gray-50'}`}
+                />
+              </div>
+              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">User Type</label>
                 <input 
                   type="text" 
                   value={user?.userType || ''} 
+                  disabled 
+                  className="w-full p-3 border rounded-lg bg-gray-50"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
+                <input 
+                  type="text" 
+                  value={user?.status || 'active'} 
                   disabled 
                   className="w-full p-3 border rounded-lg bg-gray-50"
                 />
